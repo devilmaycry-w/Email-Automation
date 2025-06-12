@@ -64,9 +64,9 @@ export async function getGmailTokens(userId: string): Promise<GmailTokens | null
     .from('user_gmail_tokens')
     .select('*')
     .eq('user_id', userId)
-    .single()
+    .maybeSingle()
 
-  if (error && error.code !== 'PGRST116') {
+  if (error) {
     throw new Error(`Failed to fetch Gmail tokens: ${error.message}`)
   }
 
