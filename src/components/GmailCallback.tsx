@@ -5,7 +5,11 @@ import { CheckCircle, AlertCircle, Mail } from 'lucide-react';
 import { supabase, getCurrentUser, storeGmailTokens } from '../lib/supabase';
 import { exchangeCodeForToken } from '../lib/gmail';
 
-const GmailCallback: React.FC = () => {
+interface GmailCallbackProps {
+  onSuccess?: () => void;
+}
+
+const GmailCallback: React.FC<GmailCallbackProps> = ({ onSuccess }) => {
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [message, setMessage] = useState('Processing Gmail authorization...');
   const navigate = useNavigate();
@@ -92,6 +96,11 @@ const GmailCallback: React.FC = () => {
         setStatus('success');
         setMessage('Gmail connected successfully! Redirecting to dashboard...');
 
+        // Call success callback if provided
+        if (onSuccess) {
+          onSuccess();
+        }
+
         // Redirect to dashboard after success
         setTimeout(() => {
           navigate('/', { replace: true });
@@ -108,7 +117,7 @@ const GmailCallback: React.FC = () => {
     };
 
     processCallback();
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, onSuccess]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center p-4 relative overflow-hidden">

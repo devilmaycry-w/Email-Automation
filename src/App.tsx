@@ -109,6 +109,17 @@ function App() {
     };
   }, [navigate, location.pathname]);
 
+  // Handle successful Gmail connection from callback
+  const handleGmailConnected = async () => {
+    try {
+      const updatedUser = await getCurrentUser();
+      setUser(updatedUser);
+      setShowSetup(false);
+    } catch (error) {
+      console.error('Error updating user after Gmail connection:', error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center relative overflow-hidden">
@@ -238,7 +249,7 @@ function App() {
       <div className="relative z-10">
         <Routes>
           <Route path="/auth" element={<Auth />} />
-          <Route path="/auth/gmail/callback" element={<GmailCallback />} />
+          <Route path="/auth/gmail/callback" element={<GmailCallback onSuccess={handleGmailConnected} />} />
           <Route path="/*" element={
             <>
               <Header user={user} onShowSetup={() => setShowSetup(true)} />

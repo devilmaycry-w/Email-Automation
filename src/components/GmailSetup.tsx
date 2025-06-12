@@ -35,8 +35,8 @@ const GmailSetup: React.FC<GmailSetupProps> = ({ user, onClose }) => {
   ];
 
   const redirectURIs = [
-    'http://localhost:5173/auth/callback',
-    'https://your-domain.com/auth/callback'
+    'http://localhost:5173/auth/gmail/callback',
+    'https://your-domain.com/auth/gmail/callback'
   ];
 
   const handleConnect = () => {
