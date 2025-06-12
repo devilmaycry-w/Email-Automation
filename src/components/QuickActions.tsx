@@ -24,42 +24,42 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user }) => {
       title: 'Test Classification',
       description: 'Test AI with sample emails',
       icon: Zap,
-      color: 'from-blue-500 to-blue-600',
+      color: 'from-[#292966] to-[#5C5C99]',
       action: () => handleAction('Test classification')
     },
     {
       title: 'Refresh Inbox',
       description: 'Sync latest emails',
       icon: RefreshCw,
-      color: 'from-green-500 to-green-600',
+      color: 'from-[#5C5C99] to-[#A3A3CC]',
       action: () => handleAction('Refresh inbox')
     },
     {
       title: 'Export Data',
       description: 'Download analytics report',
       icon: Download,
-      color: 'from-purple-500 to-purple-600',
+      color: 'from-[#A3A3CC] to-[#CCCCFF]',
       action: () => handleAction('Export data')
     },
     {
       title: 'Import Templates',
       description: 'Upload template files',
       icon: Upload,
-      color: 'from-orange-500 to-orange-600',
+      color: 'from-[#CCCCFF] to-[#292966]',
       action: () => handleAction('Import templates')
     },
     {
       title: 'Run Automation',
       description: 'Start email processing',
       icon: Play,
-      color: 'from-red-500 to-red-600',
+      color: 'from-[#292966] to-[#A3A3CC]',
       action: () => handleAction('Run automation')
     },
     {
       title: 'Advanced Settings',
       description: 'Configure AI parameters',
       icon: Settings,
-      color: 'from-gray-500 to-gray-600',
+      color: 'from-[#5C5C99] to-[#CCCCFF]',
       action: () => handleAction('Advanced settings')
     }
   ];
@@ -69,10 +69,10 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user }) => {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.3 }}
-      className="bg-white/80 backdrop-blur-lg rounded-3xl border border-gray-200/50 shadow-xl overflow-hidden"
+      className="bg-white/10 backdrop-blur-xl rounded-3xl border border-white/20 shadow-xl overflow-hidden"
     >
       <div className="p-8">
-        <h3 className="text-2xl font-bold text-gray-800 mb-6">Quick Actions</h3>
+        <h3 className="text-2xl font-bold text-white mb-6">Quick Actions</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
           {actions.map((action, index) => (
             <motion.button
@@ -83,13 +83,16 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user }) => {
               whileHover={{ scale: 1.05, y: -3 }}
               whileTap={{ scale: 0.95 }}
               onClick={action.action}
-              className="p-6 bg-gradient-to-br from-gray-50/80 to-white/80 backdrop-blur-sm rounded-2xl border border-gray-200/50 hover:shadow-xl transition-all duration-300 group hover:bg-white/90"
+              className="p-6 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/20 hover:shadow-xl transition-all duration-300 group hover:bg-white/10"
             >
-              <div className={`w-14 h-14 bg-gradient-to-r ${action.color} rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-110`}>
+              <motion.div
+                whileHover={{ scale: 1.1, rotate: 5 }}
+                className={`w-14 h-14 bg-gradient-to-r ${action.color} rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:shadow-xl transition-all duration-300`}
+              >
                 <action.icon className="w-7 h-7 text-white" />
-              </div>
-              <h4 className="font-semibold text-gray-800 text-sm mb-2">{action.title}</h4>
-              <p className="text-xs text-gray-500 leading-tight">{action.description}</p>
+              </motion.div>
+              <h4 className="font-semibold text-white text-sm mb-2">{action.title}</h4>
+              <p className="text-xs text-white/70 leading-tight">{action.description}</p>
             </motion.button>
           ))}
         </div>
