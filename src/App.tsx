@@ -21,6 +21,19 @@ function App() {
     const handleGmailCallback = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
+      const error = urlParams.get('error');
+      
+      console.log('Current URL:', window.location.href);
+      console.log('Code from URL:', code);
+      console.log('Current user:', user);
+      
+      if (error) {
+        console.error('OAuth error:', error);
+        alert('Gmail authorization was cancelled or failed. Please try again.');
+        window.history.replaceState({}, document.title, '/');
+        navigate('/');
+        return;
+      }
       
       if (code && user) {
         console.log('Processing Gmail callback with code:', code);
@@ -32,9 +45,16 @@ function App() {
             redirectUri: import.meta.env.VITE_GMAIL_REDIRECT_URI!
           };
 
+          console.log('Using config:', {
+            clientId: config.clientId ? 'Set' : 'Missing',
+            clientSecret: config.clientSecret ? 'Set' : 'Missing',
+            redirectUri: config.redirectUri
+          });
+
           const tokens = await exchangeCodeForToken(code, config);
           
           if (tokens) {
+            console.log('Tokens received successfully');
             const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
             
             await storeGmailTokens({
@@ -44,6 +64,8 @@ function App() {
               expires_at: expiresAt,
               scope: tokens.scope
             });
+
+            console.log('Tokens stored successfully');
 
             // Update user state to reflect Gmail connection
             const updatedUser = await getCurrentUser();
@@ -55,17 +77,29 @@ function App() {
             
             // Close setup modal if open
             setShowSetup(false);
+            
+            alert('Gmail connected successfully!');
+          } else {
+            throw new Error('Failed to exchange code for tokens');
           }
         } catch (error) {
           console.error('Error handling Gmail callback:', error);
+          alert('Failed to connect Gmail. Please try again.');
           // Clear URL parameters even on error
           window.history.replaceState({}, document.title, '/');
           navigate('/');
         }
+      } else if (code && !user) {
+        console.log('Code received but no user logged in, redirecting to auth');
+        // Store the code temporarily and redirect to auth
+        sessionStorage.setItem('gmail_auth_code', code);
+        window.history.replaceState({}, document.title, '/auth');
+        navigate('/auth');
       }
     };
 
-    if (user && window.location.search.includes('code=')) {
+    // Only process callback if we're on a callback URL
+    if (window.location.pathname === '/auth/callback' || window.location.search.includes('code=')) {
       handleGmailCallback();
     }
   }, [user, navigate]);
@@ -86,6 +120,42 @@ function App() {
         // Create default templates for new users
         if (event === 'SIGNED_IN') {
           await createDefaultTemplates(session.user.id);
+        }
+        
+        // Check if there's a pending Gmail auth code
+        const pendingCode = sessionStorage.getItem('gmail_auth_code');
+        if (pendingCode) {
+          sessionStorage.removeItem('gmail_auth_code');
+          // Process the Gmail callback now that user is authenticated
+          try {
+            const config = {
+              clientId: import.meta.env.VITE_GMAIL_CLIENT_ID!,
+              clientSecret: import.meta.env.VITE_GMAIL_CLIENT_SECRET!,
+              redirectUri: import.meta.env.VITE_GMAIL_REDIRECT_URI!
+            };
+
+            const tokens = await exchangeCodeForToken(pendingCode, config);
+            
+            if (tokens) {
+              const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+              
+              await storeGmailTokens({
+                user_id: session.user.id,
+                access_token: tokens.access_token,
+                refresh_token: tokens.refresh_token,
+                expires_at: expiresAt,
+                scope: tokens.scope
+              });
+
+              // Update user state
+              const updatedUser = await getCurrentUser();
+              setUser(updatedUser);
+              
+              alert('Gmail connected successfully!');
+            }
+          } catch (error) {
+            console.error('Error processing pending Gmail auth:', error);
+          }
         }
         
         // Redirect to dashboard if on auth page
@@ -252,6 +322,24 @@ function App() {
       <div className="relative z-10">
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/auth/callback" element={
+            <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="text-center"
+              >
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                  className="w-16 h-16 border-4 border-gray-800 border-t-transparent rounded-full mx-auto mb-6"
+                />
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Connecting Gmail...</h2>
+                <p className="text-gray-600">Please wait while we set up your Gmail integration</p>
+              </motion.div>
+            </div>
+          } />
           <Route path="/*" element={
             <>
               <Header user={user} onShowSetup={() => setShowSetup(true)} />
