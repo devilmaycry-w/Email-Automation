@@ -113,7 +113,10 @@ export async function createDefaultTemplates(userId: string): Promise<void> {
 
   const { error } = await supabase
     .from('email_templates')
-    .insert(defaultTemplates)
+    .upsert(defaultTemplates, {
+      onConflict: 'user_id,category',
+      ignoreDuplicates: true
+    })
 
   if (error) {
     throw new Error(`Failed to create default templates: ${error.message}`)
