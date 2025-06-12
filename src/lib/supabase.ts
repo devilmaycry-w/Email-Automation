@@ -17,19 +17,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 export interface User {
   id: string
   email?: string
+  gmail_connected?: boolean
   created_at?: string
   updated_at?: string
 }
 
 export interface EmailTemplate {
-  id: string
+  id?: string
   user_id: string
   category: 'order' | 'support' | 'general'
   subject: string
   body: string
   is_active: boolean
-  created_at: string
-  updated_at: string
+  created_at?: string
+  updated_at?: string
 }
 
 export interface GmailTokens {
@@ -57,10 +58,26 @@ export interface EmailLog {
   created_at: string
 }
 
-// Get current user
+// Get current user with Gmail connection status
 export async function getCurrentUser(): Promise<User | null> {
   const { data: { user } } = await supabase.auth.getUser()
-  return user as User | null
+  
+  if (!user) return null
+
+  // Check if user has Gmail tokens
+  const { data: gmailTokens } = await supabase
+    .from('user_gmail_tokens')
+    .select('id')
+    .eq('user_id', user.id)
+    .single()
+
+  return {
+    id: user.id,
+    email: user.email,
+    gmail_connected: !!gmailTokens,
+    created_at: user.created_at,
+    updated_at: user.updated_at
+  } as User
 }
 
 // Store Gmail tokens
@@ -139,15 +156,19 @@ export async function getTemplates(userId: string): Promise<EmailTemplate[]> {
 }
 
 // Update a template
-export async function updateTemplate(templateId: string, updates: Partial<EmailTemplate>): Promise<void> {
-  const { error } = await supabase
+export async function updateTemplate(templateId: string, updates: Partial<EmailTemplate>): Promise<EmailTemplate | null> {
+  const { data, error } = await supabase
     .from('email_templates')
     .update(updates)
     .eq('id', templateId)
+    .select()
+    .single()
 
   if (error) {
     throw new Error(`Failed to update template: ${error.message}`)
   }
+
+  return data
 }
 
 // Get Gmail tokens for a user
