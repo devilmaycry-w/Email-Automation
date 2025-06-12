@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Settings, Zap, LogOut, User } from 'lucide-react';
-import { signOut, type User as UserType } from '../lib/supabase';
+import { supabase, type User as UserType } from '../lib/supabase';
 
 interface HeaderProps {
   user: UserType | null;
@@ -21,7 +21,7 @@ const Header: React.FC<HeaderProps> = ({ user, onShowSetup }) => {
   };
 
   const handleSignOut = async () => {
-    await signOut();
+    await supabase.auth.signOut();
     navigate('/');
   };
 
