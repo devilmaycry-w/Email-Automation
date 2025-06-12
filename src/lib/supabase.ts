@@ -72,13 +72,9 @@ export const getGmailTokens = async (userId: string) => {
     .from('user_gmail_tokens')
     .select('*')
     .eq('user_id', userId)
-    .single();
+    .maybeSingle();
   
   if (error) {
-    if (error.code === 'PGRST116') {
-      // No tokens found
-      return null;
-    }
     console.error('Error fetching Gmail tokens:', error);
     return null;
   }
