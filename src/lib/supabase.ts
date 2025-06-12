@@ -58,18 +58,29 @@ export interface EmailLog {
   created_at: string
 }
 
+// Get Gmail tokens for a user
+export async function getGmailTokens(userId: string): Promise<GmailTokens | null> {
+  const { data, error } = await supabase
+    .from('user_gmail_tokens')
+    .select('*')
+    .eq('user_id', userId)
+    .single()
+
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(`Failed to fetch Gmail tokens: ${error.message}`)
+  }
+
+  return data || null
+}
+
 // Get current user with Gmail connection status
 export async function getCurrentUser(): Promise<User | null> {
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) return null
 
-  // Check if user has Gmail tokens
-  const { data: gmailTokens } = await supabase
-    .from('user_gmail_tokens')
-    .select('id')
-    .eq('user_id', user.id)
-    .single()
+  // Check if user has Gmail tokens using the existing function
+  const gmailTokens = await getGmailTokens(user.id)
 
   return {
     id: user.id,
@@ -169,21 +180,6 @@ export async function updateTemplate(templateId: string, updates: Partial<EmailT
   }
 
   return data
-}
-
-// Get Gmail tokens for a user
-export async function getGmailTokens(userId: string): Promise<GmailTokens | null> {
-  const { data, error } = await supabase
-    .from('user_gmail_tokens')
-    .select('*')
-    .eq('user_id', userId)
-    .single()
-
-  if (error && error.code !== 'PGRST116') {
-    throw new Error(`Failed to fetch Gmail tokens: ${error.message}`)
-  }
-
-  return data || null
 }
 
 // Get email logs for a user
