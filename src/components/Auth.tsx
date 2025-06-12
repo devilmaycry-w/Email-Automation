@@ -77,27 +77,27 @@ const Auth: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#CCCCFF] via-[#A3A3CC] to-[#5C5C99] flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated background blobs */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Subtle background elements */}
       <div className="absolute inset-0">
         <motion.div
           animate={{
-            x: [0, 100, 0],
-            y: [0, -100, 0],
-            scale: [1, 1.2, 1],
+            x: [0, 50, 0],
+            y: [0, -50, 0],
+            scale: [1, 1.1, 1],
           }}
           transition={{
             duration: 8,
             repeat: Infinity,
             ease: "easeInOut"
           }}
-          className="absolute top-10 left-10 w-72 h-72 bg-gradient-to-r from-[#292966]/20 to-[#5C5C99]/20 rounded-full blur-3xl"
+          className="absolute top-10 left-10 w-72 h-72 bg-gradient-to-r from-gray-200/30 to-gray-300/20 rounded-full blur-3xl"
         />
         <motion.div
           animate={{
-            x: [0, -120, 0],
-            y: [0, 80, 0],
-            scale: [1, 0.8, 1],
+            x: [0, -60, 0],
+            y: [0, 40, 0],
+            scale: [1, 0.9, 1],
           }}
           transition={{
             duration: 10,
@@ -105,7 +105,7 @@ const Auth: React.FC = () => {
             ease: "easeInOut",
             delay: 2
           }}
-          className="absolute bottom-10 right-10 w-96 h-96 bg-gradient-to-r from-[#A3A3CC]/20 to-[#CCCCFF]/20 rounded-full blur-3xl"
+          className="absolute bottom-10 right-10 w-96 h-96 bg-gradient-to-r from-gray-300/20 to-gray-200/30 rounded-full blur-3xl"
         />
       </div>
 
@@ -128,21 +128,21 @@ const Auth: React.FC = () => {
                 <motion.div
                   animate={{ rotate: [0, 360] }}
                   transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                  className="w-16 h-16 bg-gradient-to-r from-[#292966] to-[#5C5C99] rounded-2xl flex items-center justify-center shadow-2xl"
+                  className="w-16 h-16 bg-gradient-to-r from-gray-800 to-gray-600 rounded-2xl flex items-center justify-center shadow-2xl"
                 >
                   <Zap className="w-8 h-8 text-white" />
                 </motion.div>
                 <motion.div
                   animate={{ scale: [1, 1.2, 1] }}
                   transition={{ duration: 2, repeat: Infinity }}
-                  className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-[#CCCCFF] to-white rounded-full"
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-gray-300 to-white rounded-full shadow-lg"
                 />
               </div>
               <div>
-                <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-[#CCCCFF] bg-clip-text text-transparent">
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                   CodexCity
                 </h1>
-                <p className="text-white/80 font-medium">AI Email Automation</p>
+                <p className="text-gray-600 font-medium">AI Email Automation</p>
               </div>
             </motion.div>
 
@@ -150,7 +150,7 @@ const Auth: React.FC = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-3xl lg:text-4xl font-bold text-white mb-4"
+              className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4"
             >
               Transform Your Email Management
             </motion.h2>
@@ -158,7 +158,7 @@ const Auth: React.FC = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.3 }}
-              className="text-xl text-white/80 mb-8"
+              className="text-xl text-gray-600 mb-8"
             >
               Automate responses, classify emails with AI, and engage customers 24/7 with intelligent automation.
             </motion.p>
@@ -172,17 +172,17 @@ const Auth: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.4 + index * 0.1 }}
                 whileHover={{ scale: 1.02, y: -2 }}
-                className="flex items-start space-x-4 p-6 bg-white/10 backdrop-blur-lg rounded-3xl border border-white/20 shadow-xl hover:bg-white/15 transition-all duration-300"
+                className="flex items-start space-x-4 p-6 bg-white/80 backdrop-blur-xl rounded-3xl border border-gray-200/50 shadow-xl hover:shadow-2xl transition-all duration-300"
               >
                 <motion.div
                   whileHover={{ scale: 1.1, rotate: 5 }}
-                  className="p-3 bg-gradient-to-r from-[#292966] to-[#5C5C99] rounded-xl shadow-lg"
+                  className="p-3 bg-gradient-to-r from-gray-800 to-gray-600 rounded-xl shadow-lg"
                 >
                   <feature.icon className="w-6 h-6 text-white" />
                 </motion.div>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">{feature.title}</h3>
-                  <p className="text-white/70 text-sm">{feature.description}</p>
+                  <h3 className="font-semibold text-gray-900 mb-1">{feature.title}</h3>
+                  <p className="text-gray-600 text-sm">{feature.description}</p>
                 </div>
               </motion.div>
             ))}
@@ -198,13 +198,13 @@ const Auth: React.FC = () => {
         >
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="bg-white/15 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 p-8 hover:bg-white/20 transition-all duration-300"
+            className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-200/50 p-8 hover:shadow-3xl transition-all duration-300"
           >
             <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-white mb-2">
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">
                 {isLogin ? 'Welcome Back' : 'Get Started'}
               </h3>
-              <p className="text-white/70">
+              <p className="text-gray-600">
                 {isLogin ? 'Sign in to your CodexCity account' : 'Create your CodexCity account'}
               </p>
             </div>
@@ -213,7 +213,7 @@ const Auth: React.FC = () => {
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="mb-6 p-4 bg-red-500/20 backdrop-blur-sm border border-red-300/30 rounded-xl text-red-100 text-sm"
+                className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm"
               >
                 {error}
               </motion.div>
@@ -221,16 +221,16 @@ const Auth: React.FC = () => {
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Email Address
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-white/20 rounded-xl focus:ring-2 focus:ring-[#CCCCFF] focus:border-transparent transition-all duration-200 bg-white/10 backdrop-blur-sm text-white placeholder-white/50"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900 placeholder-gray-500"
                     placeholder="Enter your email"
                     required
                   />
@@ -238,16 +238,16 @@ const Auth: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Password
                 </label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/50" />
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-white/20 rounded-xl focus:ring-2 focus:ring-[#CCCCFF] focus:border-transparent transition-all duration-200 bg-white/10 backdrop-blur-sm text-white placeholder-white/50"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900 placeholder-gray-500"
                     placeholder="Enter your password"
                     required
                   />
@@ -255,11 +255,11 @@ const Auth: React.FC = () => {
               </div>
 
               <motion.button
-                whileHover={{ scale: 1.02, boxShadow: "0 20px 40px rgba(41, 41, 102, 0.3)" }}
+                whileHover={{ scale: 1.02, boxShadow: "0 20px 40px rgba(0, 0, 0, 0.15)" }}
                 whileTap={{ scale: 0.98 }}
                 type="submit"
                 disabled={loading}
-                className="w-full flex items-center justify-center space-x-2 py-3 bg-gradient-to-r from-[#292966] to-[#5C5C99] text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center space-x-2 py-3 bg-gradient-to-r from-gray-900 to-gray-700 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <motion.div
@@ -279,10 +279,10 @@ const Auth: React.FC = () => {
             <div className="mt-6">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/20"></div>
+                  <div className="w-full border-t border-gray-300"></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white/10 backdrop-blur-sm text-white/70 rounded-lg">Or continue with</span>
+                  <span className="px-2 bg-white text-gray-500 rounded-lg">Or continue with</span>
                 </div>
               </div>
 
@@ -291,7 +291,7 @@ const Auth: React.FC = () => {
                 whileTap={{ scale: 0.98 }}
                 onClick={handleGoogleAuth}
                 disabled={loading}
-                className="mt-4 w-full flex items-center justify-center space-x-3 py-3 border border-white/20 rounded-xl font-medium text-white hover:bg-white/10 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-white/5 backdrop-blur-sm"
+                className="mt-4 w-full flex items-center justify-center space-x-3 py-3 border border-gray-300 rounded-xl font-medium text-gray-700 hover:bg-gray-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed bg-white"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -308,7 +308,7 @@ const Auth: React.FC = () => {
                 whileHover={{ scale: 1.05 }}
                 type="button"
                 onClick={() => setIsLogin(!isLogin)}
-                className="text-[#CCCCFF] hover:text-white font-medium transition-colors"
+                className="text-gray-600 hover:text-gray-900 font-medium transition-colors"
               >
                 {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
               </motion.button>

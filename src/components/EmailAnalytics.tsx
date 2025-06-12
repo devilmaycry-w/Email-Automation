@@ -29,28 +29,28 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
       value: '9 AM - 11 AM',
       description: 'Highest email volume',
       icon: Clock,
-      color: 'text-[#8B7EC8]'
+      color: 'text-gray-700'
     },
     {
       title: 'Top Category',
       value: 'General (58%)',
       description: 'Most common email type',
       icon: Target,
-      color: 'text-[#6B5B95]'
+      color: 'text-gray-600'
     },
     {
       title: 'Avg. Response',
       value: '2.3 seconds',
       description: 'AI classification speed',
       icon: TrendingUp,
-      color: 'text-[#4A4063]'
+      color: 'text-gray-800'
     },
     {
       title: 'Satisfaction',
       value: '96.8%',
       description: 'Customer approval rate',
       icon: Users,
-      color: 'text-[#2D2A3D]'
+      color: 'text-gray-500'
     }
   ];
 
@@ -62,13 +62,13 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
         transition={{ duration: 0.3 }}
         className="text-center py-12"
       >
-        <h3 className="text-2xl font-bold text-white mb-4">Sign In Required</h3>
-        <p className="text-white/70 mb-6">Please sign in to view your email analytics</p>
+        <h3 className="text-2xl font-bold text-gray-900 mb-4">Sign In Required</h3>
+        <p className="text-gray-600 mb-6">Please sign in to view your email analytics</p>
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => navigate('/auth')}
-          className="px-6 py-3 bg-gradient-to-r from-[#292966] to-[#5C5C99] text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+          className="px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
         >
           Sign In
         </motion.button>
@@ -84,8 +84,8 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
       className="space-y-8"
     >
       <div>
-        <h3 className="text-3xl font-bold text-white">Email Analytics</h3>
-        <p className="text-white/70 mt-2">Track your email automation performance and insights</p>
+        <h3 className="text-3xl font-bold text-gray-900">Email Analytics</h3>
+        <p className="text-gray-600 mt-2">Track your email automation performance and insights</p>
       </div>
 
       {/* Insights Grid */}
@@ -97,16 +97,16 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, delay: index * 0.1 }}
             whileHover={{ scale: 1.05 }}
-            className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 border border-white/20 shadow-xl"
+            className="bg-white/90 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/50 shadow-xl"
           >
             <div className="flex items-center justify-between mb-4">
               <insight.icon className={`w-8 h-8 ${insight.color}`} />
-              <BarChart3 className="w-4 h-4 text-white/50" />
+              <BarChart3 className="w-4 h-4 text-gray-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-white mb-1">{insight.value}</p>
-              <p className="text-sm text-white/80 font-medium mb-1">{insight.title}</p>
-              <p className="text-xs text-white/60">{insight.description}</p>
+              <p className="text-2xl font-bold text-gray-900 mb-1">{insight.value}</p>
+              <p className="text-sm text-gray-800 font-medium mb-1">{insight.title}</p>
+              <p className="text-xs text-gray-600">{insight.description}</p>
             </div>
           </motion.div>
         ))}
@@ -117,22 +117,22 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.3 }}
-        className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-xl"
+        className="bg-white/90 backdrop-blur-xl rounded-3xl p-8 border border-gray-200/50 shadow-xl"
       >
         <div className="flex items-center justify-between mb-8">
-          <h4 className="text-xl font-semibold text-white">Weekly Email Distribution</h4>
+          <h4 className="text-xl font-semibold text-gray-900">Weekly Email Distribution</h4>
           <div className="flex items-center space-x-6 text-sm">
             <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-[#292966] rounded-full shadow-sm"></div>
-              <span className="text-white/80 font-medium">Orders</span>
+              <div className="w-3 h-3 bg-gray-800 rounded-full shadow-sm"></div>
+              <span className="text-gray-700 font-medium">Orders</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-[#5C5C99] rounded-full shadow-sm"></div>
-              <span className="text-white/80 font-medium">Support</span>
+              <div className="w-3 h-3 bg-gray-600 rounded-full shadow-sm"></div>
+              <span className="text-gray-700 font-medium">Support</span>
             </div>
             <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-[#8B7EC8] rounded-full shadow-sm"></div>
-              <span className="text-white/80 font-medium">General</span>
+              <div className="w-3 h-3 bg-gray-400 rounded-full shadow-sm"></div>
+              <span className="text-gray-700 font-medium">General</span>
             </div>
           </div>
         </div>
@@ -146,7 +146,7 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
               transition={{ duration: 0.5, delay: index * 0.1 }}
               className="flex items-center space-x-6"
             >
-              <div className="w-12 text-sm font-medium text-white/80">
+              <div className="w-12 text-sm font-medium text-gray-700">
                 {data.day}
               </div>
               <div className="flex-1 flex items-center space-x-1">
@@ -154,22 +154,22 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
                   initial={{ width: 0 }}
                   animate={{ width: `${(data.orders / maxValue) * 100}%` }}
                   transition={{ duration: 0.8, delay: index * 0.1 }}
-                  className="bg-[#292966] h-5 rounded-l-lg shadow-sm"
+                  className="bg-gray-800 h-5 rounded-l-lg shadow-sm"
                 ></motion.div>
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${(data.support / maxValue) * 100}%` }}
                   transition={{ duration: 0.8, delay: index * 0.1 + 0.1 }}
-                  className="bg-[#5C5C99] h-5 shadow-sm"
+                  className="bg-gray-600 h-5 shadow-sm"
                 ></motion.div>
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${(data.general / maxValue) * 100}%` }}
                   transition={{ duration: 0.8, delay: index * 0.1 + 0.2 }}
-                  className="bg-[#8B7EC8] h-5 rounded-r-lg shadow-sm"
+                  className="bg-gray-400 h-5 rounded-r-lg shadow-sm"
                 ></motion.div>
               </div>
-              <div className="text-sm text-white/80 w-16 text-right font-medium">
+              <div className="text-sm text-gray-700 w-16 text-right font-medium">
                 {data.orders + data.support + data.general}
               </div>
             </motion.div>
@@ -183,35 +183,35 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.4 }}
-          className="bg-gradient-to-br from-[#292966]/20 to-[#5C5C99]/20 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-xl"
+          className="bg-gradient-to-br from-gray-800/10 to-gray-600/10 backdrop-blur-xl rounded-3xl p-8 border border-gray-200/50 shadow-xl"
         >
-          <h4 className="text-xl font-semibold text-white mb-6">Classification Accuracy</h4>
+          <h4 className="text-xl font-semibold text-gray-900 mb-6">Classification Accuracy</h4>
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <span className="text-white/80 font-medium">Order Inquiries</span>
+              <span className="text-gray-700 font-medium">Order Inquiries</span>
               <div className="flex items-center space-x-3">
-                <div className="w-32 bg-white/20 rounded-full h-3">
-                  <div className="bg-[#292966] h-3 rounded-full shadow-sm" style={{ width: '98%' }}></div>
+                <div className="w-32 bg-gray-200 rounded-full h-3">
+                  <div className="bg-gray-800 h-3 rounded-full shadow-sm" style={{ width: '98%' }}></div>
                 </div>
-                <span className="text-sm font-semibold text-[#8B7EC8] w-10">98%</span>
+                <span className="text-sm font-semibold text-gray-700 w-10">98%</span>
               </div>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-white/80 font-medium">Support Requests</span>
+              <span className="text-gray-700 font-medium">Support Requests</span>
               <div className="flex items-center space-x-3">
-                <div className="w-32 bg-white/20 rounded-full h-3">
-                  <div className="bg-[#5C5C99] h-3 rounded-full shadow-sm" style={{ width: '96%' }}></div>
+                <div className="w-32 bg-gray-200 rounded-full h-3">
+                  <div className="bg-gray-600 h-3 rounded-full shadow-sm" style={{ width: '96%' }}></div>
                 </div>
-                <span className="text-sm font-semibold text-[#6B5B95] w-10">96%</span>
+                <span className="text-sm font-semibold text-gray-600 w-10">96%</span>
               </div>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-white/80 font-medium">General Emails</span>
+              <span className="text-gray-700 font-medium">General Emails</span>
               <div className="flex items-center space-x-3">
-                <div className="w-32 bg-white/20 rounded-full h-3">
-                  <div className="bg-[#8B7EC8] h-3 rounded-full shadow-sm" style={{ width: '99%' }}></div>
+                <div className="w-32 bg-gray-200 rounded-full h-3">
+                  <div className="bg-gray-400 h-3 rounded-full shadow-sm" style={{ width: '99%' }}></div>
                 </div>
-                <span className="text-sm font-semibold text-[#4A4063] w-10">99%</span>
+                <span className="text-sm font-semibold text-gray-500 w-10">99%</span>
               </div>
             </div>
           </div>
@@ -221,37 +221,37 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.5 }}
-          className="bg-gradient-to-br from-[#5C5C99]/20 to-[#A3A3CC]/20 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-xl"
+          className="bg-gradient-to-br from-gray-600/10 to-gray-400/10 backdrop-blur-xl rounded-3xl p-8 border border-gray-200/50 shadow-xl"
         >
-          <h4 className="text-xl font-semibold text-white mb-6">Response Metrics</h4>
+          <h4 className="text-xl font-semibold text-gray-900 mb-6">Response Metrics</h4>
           <div className="space-y-6">
             <motion.div
               whileHover={{ x: 5 }}
-              className="flex justify-between items-center p-3 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20"
+              className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
             >
-              <span className="text-white/80 font-medium">Auto-responses Sent</span>
-              <span className="font-semibold text-[#8B7EC8]">1,247</span>
+              <span className="text-gray-700 font-medium">Auto-responses Sent</span>
+              <span className="font-semibold text-gray-700">1,247</span>
             </motion.div>
             <motion.div
               whileHover={{ x: 5 }}
-              className="flex justify-between items-center p-3 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20"
+              className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
             >
-              <span className="text-white/80 font-medium">Manual Overrides</span>
-              <span className="font-semibold text-[#6B5B95]">23</span>
+              <span className="text-gray-700 font-medium">Manual Overrides</span>
+              <span className="font-semibold text-gray-600">23</span>
             </motion.div>
             <motion.div
               whileHover={{ x: 5 }}
-              className="flex justify-between items-center p-3 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20"
+              className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
             >
-              <span className="text-white/80 font-medium">Failed Classifications</span>
-              <span className="font-semibold text-[#4A4063]">8</span>
+              <span className="text-gray-700 font-medium">Failed Classifications</span>
+              <span className="font-semibold text-gray-500">8</span>
             </motion.div>
             <motion.div
               whileHover={{ x: 5 }}
-              className="flex justify-between items-center p-3 bg-white/10 backdrop-blur-sm rounded-xl border border-white/20"
+              className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
             >
-              <span className="text-white/80 font-medium">Success Rate</span>
-              <span className="font-semibold text-[#2D2A3D]">98.5%</span>
+              <span className="text-gray-700 font-medium">Success Rate</span>
+              <span className="font-semibold text-gray-800">98.5%</span>
             </motion.div>
           </div>
         </motion.div>

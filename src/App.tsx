@@ -125,35 +125,35 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#CCCCFF] via-[#A3A3CC] to-[#5C5C99] flex items-center justify-center relative overflow-hidden">
-        {/* Animated background blobs */}
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center relative overflow-hidden">
+        {/* Subtle background elements */}
         <div className="absolute inset-0">
           <motion.div
             animate={{
-              x: [0, 100, 0],
-              y: [0, -100, 0],
-              scale: [1, 1.2, 1],
+              x: [0, 50, 0],
+              y: [0, -30, 0],
+              scale: [1, 1.05, 1],
             }}
             transition={{
-              duration: 8,
+              duration: 12,
               repeat: Infinity,
               ease: "easeInOut"
             }}
-            className="absolute top-20 left-20 w-64 h-64 bg-gradient-to-r from-[#292966]/20 to-[#5C5C99]/20 rounded-full blur-3xl"
+            className="absolute top-20 left-20 w-64 h-64 bg-gradient-to-r from-gray-200/30 to-gray-300/20 rounded-full blur-3xl"
           />
           <motion.div
             animate={{
-              x: [0, -120, 0],
-              y: [0, 80, 0],
-              scale: [1, 0.8, 1],
+              x: [0, -40, 0],
+              y: [0, 40, 0],
+              scale: [1, 0.95, 1],
             }}
             transition={{
-              duration: 10,
+              duration: 15,
               repeat: Infinity,
               ease: "easeInOut",
-              delay: 2
+              delay: 3
             }}
-            className="absolute bottom-20 right-20 w-80 h-80 bg-gradient-to-r from-[#A3A3CC]/20 to-[#CCCCFF]/20 rounded-full blur-3xl"
+            className="absolute bottom-20 right-20 w-80 h-80 bg-gradient-to-r from-gray-300/20 to-gray-200/30 rounded-full blur-3xl"
           />
         </div>
 
@@ -167,30 +167,30 @@ function App() {
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-              className="w-24 h-24 border-4 border-[#292966] border-t-transparent rounded-full mx-auto"
+              className="w-24 h-24 border-4 border-gray-800 border-t-transparent rounded-full mx-auto"
             />
             <motion.div
               animate={{ rotate: -360 }}
               transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-              className="absolute inset-0 w-24 h-24 border-4 border-[#5C5C99]/50 border-b-transparent rounded-full mx-auto"
+              className="absolute inset-0 w-24 h-24 border-4 border-gray-400/50 border-b-transparent rounded-full mx-auto"
             />
-            <div className="absolute inset-0 w-24 h-24 bg-gradient-to-r from-[#CCCCFF]/20 to-[#A3A3CC]/20 rounded-full mx-auto backdrop-blur-sm" />
+            <div className="absolute inset-0 w-24 h-24 bg-gradient-to-r from-white/40 to-gray-100/30 rounded-full mx-auto backdrop-blur-sm" />
           </div>
           
           <motion.div
-            className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 shadow-2xl"
+            className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 border border-gray-200/50 shadow-2xl"
             animate={{ y: [0, -10, 0] }}
             transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           >
             <motion.h2 
-              className="text-3xl font-bold text-white mb-4"
+              className="text-3xl font-bold text-gray-900 mb-4"
               animate={{ opacity: [0.7, 1, 0.7] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
               Loading CodexCity...
             </motion.h2>
             <motion.p 
-              className="text-white/80 font-medium"
+              className="text-gray-600 font-medium"
               animate={{ opacity: [0.5, 0.8, 0.5] }}
               transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
             >
@@ -203,27 +203,27 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#CCCCFF] via-[#A3A3CC] to-[#5C5C99] relative overflow-hidden">
-      {/* Animated background elements */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 relative overflow-hidden">
+      {/* Subtle background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <motion.div
           animate={{
-            x: [0, 100, 0],
-            y: [0, -50, 0],
-            scale: [1, 1.1, 1],
+            x: [0, 60, 0],
+            y: [0, -30, 0],
+            scale: [1, 1.05, 1],
           }}
           transition={{
             duration: 12,
             repeat: Infinity,
             ease: "easeInOut"
           }}
-          className="absolute -top-20 -left-20 w-96 h-96 bg-gradient-to-r from-[#292966]/10 to-[#5C5C99]/10 rounded-full blur-3xl"
+          className="absolute -top-20 -left-20 w-96 h-96 bg-gradient-to-r from-gray-200/20 to-gray-300/15 rounded-full blur-3xl"
         />
         <motion.div
           animate={{
-            x: [0, -80, 0],
-            y: [0, 60, 0],
-            scale: [1, 0.9, 1],
+            x: [0, -40, 0],
+            y: [0, 30, 0],
+            scale: [1, 0.95, 1],
           }}
           transition={{
             duration: 15,
@@ -231,13 +231,13 @@ function App() {
             ease: "easeInOut",
             delay: 3
           }}
-          className="absolute top-1/2 -right-32 w-80 h-80 bg-gradient-to-r from-[#A3A3CC]/15 to-[#CCCCFF]/15 rounded-full blur-3xl"
+          className="absolute top-1/2 -right-32 w-80 h-80 bg-gradient-to-r from-gray-300/15 to-gray-200/20 rounded-full blur-3xl"
         />
         <motion.div
           animate={{
-            x: [0, 60, 0],
-            y: [0, -40, 0],
-            scale: [1, 1.2, 1],
+            x: [0, 30, 0],
+            y: [0, -20, 0],
+            scale: [1, 1.1, 1],
           }}
           transition={{
             duration: 10,
@@ -245,7 +245,7 @@ function App() {
             ease: "easeInOut",
             delay: 5
           }}
-          className="absolute bottom-20 left-1/3 w-64 h-64 bg-gradient-to-r from-[#5C5C99]/10 to-[#292966]/10 rounded-full blur-3xl"
+          className="absolute bottom-20 left-1/3 w-64 h-64 bg-gradient-to-r from-gray-400/10 to-gray-300/15 rounded-full blur-3xl"
         />
       </div>
 
