@@ -76,6 +76,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
     }
   };
 
+  // Handle user updates from QuickActions
+  const handleUserUpdate = (updatedUser: User) => {
+    setUser(updatedUser);
+  };
+
   const stats = [
     { label: 'Emails Processed', value: '1,247', icon: Mail, color: 'from-gray-800 to-gray-600', change: '+12%' },
     { label: 'AI Classifications', value: '98.5%', icon: Brain, color: 'from-gray-700 to-gray-500', change: '+2.1%' },
@@ -202,7 +207,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
       </motion.div>
 
       {/* Quick Actions */}
-      <QuickActions user={user} />
+      <QuickActions user={user} onUserUpdate={handleUserUpdate} />
 
       {/* Manual Override Toggle Section */}
       {user && (

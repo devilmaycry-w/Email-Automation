@@ -18,7 +18,8 @@ export interface User {
   id: string
   email?: string
   gmail_connected?: boolean
-  manual_override_active?: boolean // Added for manual override feature
+  manual_override_active?: boolean
+  last_poll_timestamp?: string // Added for persistent email polling
   created_at?: string
   updated_at?: string
 }
@@ -106,6 +107,7 @@ export async function getCurrentUser(): Promise<User | null> {
       created_at: authUser.created_at,
       updated_at: authUser.updated_at,
       manual_override_active: false, // Default
+      last_poll_timestamp: undefined, // Default
     };
     let gmail_connected = false;
 
@@ -160,6 +162,7 @@ export async function getCurrentUser(): Promise<User | null> {
       id: userProfileData.id!, // id is guaranteed from authUser
       email: userProfileData.email,
       manual_override_active: userProfileData.manual_override_active ?? false,
+      last_poll_timestamp: userProfileData.last_poll_timestamp,
       created_at: userProfileData.created_at,
       updated_at: userProfileData.updated_at,
       gmail_connected: gmail_connected,
@@ -297,6 +300,26 @@ export async function updateUserManualOverride(userId: string, status: boolean):
   if (error) {
     console.error('Error updating manual override status:', error.message)
     throw new Error(`Failed to update manual override status: ${error.message}`)
+  }
+
+  return data
+}
+
+// Update user's last poll timestamp
+export async function updateUserLastPollTimestamp(userId: string, timestamp: string): Promise<User | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .update({ 
+      last_poll_timestamp: timestamp, 
+      updated_at: new Date().toISOString() 
+    })
+    .eq('id', userId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating last poll timestamp:', error.message)
+    throw new Error(`Failed to update last poll timestamp: ${error.message}`)
   }
 
   return data

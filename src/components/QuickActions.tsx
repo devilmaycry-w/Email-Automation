@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Zap, RefreshCw, Settings, Download, Upload, Play, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
-import { type User, getGmailTokens } from '../lib/supabase';
+import { type User, getGmailTokens, getCurrentUser } from '../lib/supabase';
 import { processInbox } from '../lib/emailProcessor';
 
 interface QuickActionsProps {
   user: User | null;
+  onUserUpdate?: (user: User) => void; // Optional callback to update user in parent component
 }
 
-const QuickActions: React.FC<QuickActionsProps> = ({ user }) => {
+const QuickActions: React.FC<QuickActionsProps> = ({ user, onUserUpdate }) => {
   const navigate = useNavigate();
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({});
   const [actionResults, setActionResults] = useState<Record<string, { type: 'success' | 'error'; message: string }>>({});
@@ -61,12 +62,28 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user }) => {
         }
       }
 
-      console.log('Starting email processing for user:', user.id);
+      console.log('[QuickActions] Starting email processing for user:', user.id);
+      console.log('[QuickActions] Using last poll timestamp:', user.last_poll_timestamp);
       
-      // Process the inbox
-      const result = await processInbox(user.id, gmailTokens.access_token);
+      // Process the inbox with the user's last poll timestamp
+      const result = await processInbox(
+        user.id, 
+        gmailTokens.access_token, 
+        user.last_poll_timestamp // Pass the stored timestamp
+      );
       
-      console.log('Email processing completed:', result);
+      console.log('[QuickActions] Email processing completed:', result);
+      
+      // Refresh user data to get updated last_poll_timestamp
+      try {
+        const updatedUser = await getCurrentUser();
+        if (updatedUser && onUserUpdate) {
+          onUserUpdate(updatedUser);
+        }
+      } catch (refreshError) {
+        console.warn('[QuickActions] Failed to refresh user data after processing:', refreshError);
+        // Non-critical error, continue with result display
+      }
       
       if (result.processedCount > 0) {
         setResult('Run automation', 'success', `Successfully processed ${result.processedCount} email(s)! Check the Analytics tab to see the results.`);
@@ -75,7 +92,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user }) => {
       }
 
     } catch (error: any) {
-      console.error('Error running automation:', error);
+      console.error('[QuickActions] Error running automation:', error);
       setResult('Run automation', 'error', error.message || 'Failed to run automation. Please try again.');
     } finally {
       setLoading('Run automation', false);
@@ -152,6 +169,17 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user }) => {
     >
       <div className="p-8">
         <h3 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h3>
+        
+        {/* Display last poll timestamp if available */}
+        {user?.last_poll_timestamp && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+            <p className="text-sm text-gray-600">
+              <span className="font-medium">Last email check:</span>{' '}
+              {new Date(user.last_poll_timestamp).toLocaleString()}
+            </p>
+          </div>
+        )}
+        
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
           {actions.map((action, index) => {
             const isLoading = loadingStates[action.title];
