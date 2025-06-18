@@ -2,8 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle, AlertCircle, Mail } from 'lucide-react';
+import { supabase, getCurrentUser, storeGmailTokens } from '../lib/supabase';
+import { exchangeCodeForToken } from '../lib/gmail';
 
-const GmailCallback: React.FC = () => {
+interface GmailCallbackProps {
+  onSuccess?: () => void;
+}
+
+const GmailCallback: React.FC<GmailCallbackProps> = ({ onSuccess }) => {
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [message, setMessage] = useState('Processing Gmail authorization...');
   const navigate = useNavigate();
@@ -23,7 +29,7 @@ const GmailCallback: React.FC = () => {
           console.error('OAuth error:', error);
           setStatus('error');
           setMessage('Gmail authorization was cancelled or failed. Please try again.');
-          setTimeout(() => navigate('/', { replace: true }), 3000);
+          setTimeout(() => navigate('/'), 3000);
           return;
         }
 
@@ -31,21 +37,74 @@ const GmailCallback: React.FC = () => {
         if (!code) {
           setStatus('error');
           setMessage('No authorization code received from Gmail.');
-          setTimeout(() => navigate('/', { replace: true }), 3000);
+          setTimeout(() => navigate('/'), 3000);
           return;
         }
 
-        console.log('Gmail authorization code received, storing in session storage');
-        setMessage('Gmail authorization successful! Redirecting...');
+        // Check if user is authenticated with Supabase
+        const user = await getCurrentUser();
+        if (!user) {
+          console.log('No authenticated user, redirecting to auth');
+          // Store the code temporarily and redirect to auth
+          sessionStorage.setItem('gmail_auth_code', code);
+          navigate('/auth');
+          return;
+        }
+
+        setMessage('Exchanging authorization code for tokens...');
+
+        // Prepare Gmail OAuth configuration
+        const config = {
+          clientId: import.meta.env.VITE_GMAIL_CLIENT_ID!,
+          clientSecret: import.meta.env.VITE_GMAIL_CLIENT_SECRET!,
+          redirectUri: import.meta.env.VITE_GMAIL_REDIRECT_URI!
+        };
+
+        // Validate configuration
+        if (!config.clientId || !config.clientSecret || !config.redirectUri) {
+          throw new Error('Gmail OAuth configuration is incomplete. Please check your environment variables.');
+        }
+
+        console.log('Using Gmail config:', {
+          clientId: config.clientId ? 'Set' : 'Missing',
+          clientSecret: config.clientSecret ? 'Set' : 'Missing',
+          redirectUri: config.redirectUri
+        });
+
+        // Exchange code for tokens
+        const tokens = await exchangeCodeForToken(code, config);
+        
+        if (!tokens) {
+          throw new Error('Failed to exchange authorization code for tokens');
+        }
+
+        console.log('Tokens received successfully');
+        setMessage('Storing Gmail tokens...');
+
+        // Calculate expiration time
+        const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+        // Store tokens in Supabase
+        await storeGmailTokens(user.id, {
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token,
+          expires_at: expiresAt,
+          scope: tokens.scope
+        });
+
+        console.log('Tokens stored successfully');
         setStatus('success');
+        setMessage('Gmail connected successfully! Redirecting to dashboard...');
 
-        // Store the code in session storage for App.tsx to process
-        sessionStorage.setItem('gmail_auth_code', code);
+        // Call success callback if provided
+        if (onSuccess) {
+          onSuccess();
+        }
 
-        // Redirect to home page immediately - App.tsx will handle the rest
+        // Redirect to dashboard after success
         setTimeout(() => {
           navigate('/', { replace: true });
-        }, 1500);
+        }, 2000);
 
       } catch (error) {
         console.error('Error processing Gmail callback:', error);
@@ -53,12 +112,12 @@ const GmailCallback: React.FC = () => {
         setMessage(error instanceof Error ? error.message : 'An unexpected error occurred');
         
         // Redirect to home after error
-        setTimeout(() => navigate('/', { replace: true }), 5000);
+        setTimeout(() => navigate('/'), 5000);
       }
     };
 
     processCallback();
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, onSuccess]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center p-4 relative overflow-hidden">
@@ -159,15 +218,15 @@ const GmailCallback: React.FC = () => {
               transition={{ duration: 2, repeat: Infinity }}
               className="text-sm text-gray-600"
             >
-              Please wait while we process your Gmail authorization...
+              Please wait while we set up your Gmail connection...
             </motion.div>
           )}
 
           {status === 'success' && (
             <div className="bg-green-50 rounded-2xl p-4 border border-green-200 mt-6">
               <p className="text-sm text-green-700">
-                Your Gmail authorization has been processed successfully. 
-                You will be redirected to complete the setup.
+                Your Gmail account has been successfully connected to CodexCity. 
+                You can now use AI-powered email automation features.
               </p>
             </div>
           )}
@@ -180,7 +239,7 @@ const GmailCallback: React.FC = () => {
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => navigate('/', { replace: true })}
+                onClick={() => navigate('/')}
                 className="px-4 py-2 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-colors"
               >
                 Return to Dashboard
