@@ -76,37 +76,78 @@ export async function getGmailTokens(userId: string): Promise<GmailTokens | null
 
 // Get current user with Gmail connection status
 export async function getCurrentUser(): Promise<User | null> {
-  const { data: { user: authUser } } = await supabase.auth.getUser()
+  const { data: { user: authUser } } = await supabase.auth.getUser();
   
-  if (!authUser) return null
+  if (!authUser) {
+    console.log('[Supabase] getCurrentUser: No authenticated user found.');
+    return null;
+  }
+  console.log('[Supabase] getCurrentUser: authUser found:', authUser.id, authUser.email);
 
-  // Fetch full user profile from 'users' table
-  const { data: userProfile, error: profileError } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', authUser.id)
-    .single()
+  let userProfileData: Partial<User> = { // Use Partial<User> to build up the profile
+    id: authUser.id,
+    email: authUser.email,
+    created_at: authUser.created_at,
+    updated_at: authUser.updated_at,
+    manual_override_active: false, // Default
+  };
+  let gmail_connected = false;
 
-  if (profileError) {
-    console.error('Error fetching user profile:', profileError.message)
-    // Return basic info from authUser if profile is missing, though this indicates an issue
-    return {
-      id: authUser.id,
-      email: authUser.email,
-      gmail_connected: false, // Cannot determine without profile or tokens call
-      manual_override_active: false, // Default if profile is missing
-      created_at: authUser.created_at,
-      updated_at: authUser.updated_at,
-    } as User
+  try {
+    // Fetch full user profile from 'users' table
+    console.log('[Supabase] getCurrentUser: Attempting to fetch profile from "users" table for user ID:', authUser.id);
+    const { data: fetchedProfile, error: profileError } = await supabase
+      .from('users') // Assuming 'users' is your public table for profiles
+      .select('*')
+      .eq('id', authUser.id)
+      .single();
+
+    if (profileError) {
+      // Do not throw if RLS makes it return no rows, or if profile is simply not there yet.
+      // Log the error but proceed with basic authUser data.
+      console.warn('[Supabase] getCurrentUser: Error fetching user profile from "users" table:', profileError.message);
+      // userProfileData remains the default from authUser, which is intended.
+      // If the error is critical (e.g. table doesn't exist, network issue), it might still bubble up if not caught by Supabase client.
+    } else if (fetchedProfile) {
+      console.log('[Supabase] getCurrentUser: Profile fetched successfully from "users" table:', fetchedProfile);
+      userProfileData = { ...userProfileData, ...fetchedProfile }; // Merge authUser info with profile info
+    } else {
+      console.log('[Supabase] getCurrentUser: No profile found in "users" table for user ID:', authUser.id, 'Will use default data from auth.user.');
+      // This case means the query was successful but no row was returned.
+      // userProfileData will be the default from authUser.
+    }
+  } catch (e: any) {
+    console.error('[Supabase] getCurrentUser: Exception while fetching profile from "users" table:', e.message);
+    // userProfileData remains the default from authUser.
   }
 
-  // Check if user has Gmail tokens using the existing function
-  const gmailTokens = await getGmailTokens(authUser.id)
+  try {
+    // Check if user has Gmail tokens using the existing function
+    console.log('[Supabase] getCurrentUser: Attempting to fetch Gmail tokens for user ID:', authUser.id);
+    const gmailTokens = await getGmailTokens(authUser.id);
+    if (gmailTokens) {
+      console.log('[Supabase] getCurrentUser: Gmail tokens found.');
+      gmail_connected = true;
+    } else {
+      console.log('[Supabase] getCurrentUser: No Gmail tokens found.');
+      gmail_connected = false;
+    }
+  } catch (e: any) {
+    console.error('[Supabase] getCurrentUser: Exception while fetching Gmail tokens:', e.message);
+    gmail_connected = false; // Ensure it's false if token fetching fails
+  }
 
-  return {
-    ...userProfile, // Contains id, email, manual_override_active, etc. from 'users' table
-    gmail_connected: !!gmailTokens, // Overwrite or set based on token check
-  } as User
+  const finalUserObject: User = {
+    id: userProfileData.id!, // id is guaranteed from authUser
+    email: userProfileData.email,
+    manual_override_active: userProfileData.manual_override_active ?? false,
+    created_at: userProfileData.created_at,
+    updated_at: userProfileData.updated_at,
+    gmail_connected: gmail_connected,
+  };
+
+  console.log('[Supabase] getCurrentUser: Returning final User object:', finalUserObject);
+  return finalUserObject;
 }
 
 // Store Gmail tokens

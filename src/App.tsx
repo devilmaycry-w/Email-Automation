@@ -20,141 +20,125 @@ function App() {
   // Auth state management
   useEffect(() => {
     let mounted = true;
-    console.log('🚀 App useEffect mounted. Initial loading state:', loading);
-    console.log('📍 Current location:', location.pathname);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) {
-        console.log('⚠️ Component unmounted, skipping auth state change');
-        return;
-      }
+      if (!mounted) return;
 
-      console.log('🔐 Auth state change event:', event, 'User ID:', session?.user?.id);
+      console.log('[App.tsx] Auth state change:', event, session?.user?.id);
 
       if (event === 'SIGNED_IN' && session?.user) {
-        console.log('✅ Auth state: SIGNED_IN. Attempting to get current user...');
-        
+        console.log('[App.tsx] SIGNED_IN event detected for user ID:', session.user.id);
         try {
+          console.log('[App.tsx] SIGNED_IN: Before getCurrentUser().');
           const currentUser = await getCurrentUser();
-          setUser(currentUser);
-          console.log('👤 User state updated after SIGNED_IN:', currentUser ? {
-            id: currentUser.id,
-            email: currentUser.email,
-            gmail_connected: currentUser.gmail_connected,
-            manual_override_active: currentUser.manual_override_active
-          } : 'No user returned');
-          
-          // Create default templates for new users
-          if (event === 'SIGNED_IN') {
-            console.log('📧 Creating/checking default templates...');
+          console.log('[App.tsx] SIGNED_IN: After getCurrentUser(). currentUser:', currentUser);
+
+          if (!currentUser) {
+            // This case might happen if getCurrentUser itself returns null despite authUser being present
+            // (e.g. if the function had an internal unrecoverable issue not caught before the final return)
+            console.error('[App.tsx] SIGNED_IN: getCurrentUser() returned null/undefined unexpectedly for an authenticated user. Setting user to null.');
+            setUser(null);
+            // Potentially navigate to an error page or show a global error message
+            // For now, it will just lead to the "logged out" state view.
+          } else {
+            console.log('[App.tsx] SIGNED_IN: Before setUser().');
+            setUser(currentUser);
+            console.log('[App.tsx] SIGNED_IN: After setUser().');
+
+            console.log('[App.tsx] SIGNED_IN: Before createDefaultTemplates().');
             try {
               await createDefaultTemplates(session.user.id);
-              console.log('✅ Default templates creation/check completed.');
-            } catch (error) {
-              console.error('❌ Error creating default templates:', error);
+              console.log('[App.tsx] SIGNED_IN: After createDefaultTemplates() (success).');
+            } catch (templateError) {
+              console.error('[App.tsx] SIGNED_IN: Error creating default templates:', templateError);
+              console.log('[App.tsx] SIGNED_IN: After createDefaultTemplates() (error).');
+              // Non-fatal, continue user session.
             }
-          }
-          
-          // Check if there's a pending Gmail auth code
-          const pendingCode = sessionStorage.getItem('gmail_auth_code');
-          if (pendingCode) {
-            console.log('📬 Pending Gmail auth code found. Starting Gmail token exchange...');
-            sessionStorage.removeItem('gmail_auth_code');
-            
-            try {
-              const config = {
-                clientId: import.meta.env.VITE_GMAIL_CLIENT_ID!,
-                clientSecret: import.meta.env.VITE_GMAIL_CLIENT_SECRET!,
-                redirectUri: import.meta.env.VITE_GMAIL_REDIRECT_URI!
-              };
 
-              // Add a check for missing config values here for better debugging
-              console.log('🔧 Gmail OAuth config check:', {
-                clientId: !!config.clientId,
-                clientSecret: !!config.clientSecret,
-                redirectUri: !!config.redirectUri,
-                redirectUriValue: config.redirectUri
-              });
+            const pendingCode = sessionStorage.getItem('gmail_auth_code');
+            if (pendingCode) {
+              console.log('[App.tsx] SIGNED_IN: Pending Gmail auth code found:', pendingCode);
+              sessionStorage.removeItem('gmail_auth_code');
+              try {
+                const config = {
+                  clientId: import.meta.env.VITE_GMAIL_CLIENT_ID!,
+                  clientSecret: import.meta.env.VITE_GMAIL_CLIENT_SECRET!,
+                  redirectUri: import.meta.env.VITE_GMAIL_REDIRECT_URI!
+                };
+                const tokens = await exchangeCodeForToken(pendingCode, config);
+                if (tokens) {
+                  const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+                  await storeGmailTokens(session.user.id, {
+                    access_token: tokens.access_token,
+                    refresh_token: tokens.refresh_token,
+                    expires_at: expiresAt,
+                    scope: tokens.scope
+                  });
 
-              if (!config.clientId || !config.clientSecret || !config.redirectUri) {
-                console.error('❌ Gmail OAuth config missing:', {
-                  clientId: !!config.clientId,
-                  clientSecret: !!config.clientSecret,
-                  redirectUri: !!config.redirectUri
-                });
-                throw new Error('Gmail OAuth configuration is incomplete. Please check your environment variables.');
+                  console.log('[App.tsx] SIGNED_IN: Before getCurrentUser() after Gmail token storage.');
+                  const updatedUserWithGmail = await getCurrentUser(); // Re-fetch user to get updated gmail_connected status
+                  console.log('[App.tsx] SIGNED_IN: After getCurrentUser() after Gmail token storage. updatedUser:', updatedUserWithGmail);
+
+                  if (updatedUserWithGmail) {
+                    console.log('[App.tsx] SIGNED_IN: Before setUser() after Gmail token storage.');
+                    setUser(updatedUserWithGmail);
+                    console.log('[App.tsx] SIGNED_IN: After setUser() after Gmail token storage.');
+                  } else {
+                     console.error('[App.tsx] SIGNED_IN: Failed to get updated user after Gmail token storage. User might be partially set.');
+                     // setUser(currentUser); // Fallback to user without updated Gmail status if re-fetch fails
+                  }
+                  alert('Gmail connected successfully!');
+                }
+                console.log('[App.tsx] SIGNED_IN: After processing pending Gmail auth code.');
+              } catch (gmailError) {
+                console.error('[App.tsx] SIGNED_IN: Error processing pending Gmail auth:', gmailError);
+                console.log('[App.tsx] SIGNED_IN: After processing pending Gmail auth code (error).');
+                // Non-fatal for login, user might need to retry Gmail connect.
               }
-
-              console.log('🔄 Exchanging Gmail auth code for tokens...');
-              const tokens = await exchangeCodeForToken(pendingCode, config);
-              console.log('🎫 Gmail token exchange result:', tokens ? 'Success' : 'Failure');
-              
-              if (tokens) {
-                const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-                
-                console.log('💾 Storing Gmail tokens in Supabase...');
-                await storeGmailTokens(session.user.id, {
-                  access_token: tokens.access_token,
-                  refresh_token: tokens.refresh_token,
-                  expires_at: expiresAt,
-                  scope: tokens.scope
-                });
-                console.log('✅ Gmail tokens stored. Updating user state...');
-
-                const updatedUser = await getCurrentUser();
-                setUser(updatedUser);
-                console.log('🔄 User state updated with Gmail connection status:', updatedUser?.gmail_connected);
-                
-                alert('Gmail connected successfully!');
-              }
-            } catch (error) {
-              console.error('❌ Error processing pending Gmail auth:', error);
-            } finally {
-              console.log('🏁 Finished pending Gmail auth processing block.');
             }
-          }
-          
-          // Redirect to dashboard if on auth page
-          if (location.pathname === '/auth') {
-            console.log('🔀 Redirecting from /auth to / (after SIGNED_IN).');
-            navigate('/');
+
+            if (location.pathname === '/auth') {
+              console.log('[App.tsx] SIGNED_IN: Before navigate("/") from /auth page.');
+              navigate('/');
+              console.log('[App.tsx] SIGNED_IN: After navigate("/") from /auth page.');
+            }
           }
         } catch (error) {
-          console.error('❌ Error in SIGNED_IN handler:', error);
+          console.error('[App.tsx] SIGNED_IN: Critical error during user setup process:', error);
+          setUser(null); // Reset user state if setup fails critically
+          // Potentially navigate to an error page or show a global error message
         }
-        
-        console.log('⏰ Setting loading to false after SIGNED_IN event.');
-        setLoading(false);
       } else if (event === 'SIGNED_OUT') {
-        console.log('🚪 Auth state: SIGNED_OUT. Setting user to null and loading to false.');
+        console.log('[App.tsx] SIGNED_OUT event detected.');
+        console.log('[App.tsx] Before setUser(null) in SIGNED_OUT.');
         setUser(null);
-        setLoading(false);
-      } else {
-        console.log('🔄 Auth state: Other event (' + event + '). Ensuring loading is false.');
-        setLoading(false);
+        console.log('[App.tsx] After setUser(null) in SIGNED_OUT.');
       }
+
+      console.log('[App.tsx] Before setLoading(false) at end of onAuthStateChange.');
+      setLoading(false);
+      console.log('[App.tsx] After setLoading(false) at end of onAuthStateChange.');
     });
 
     // Check initial auth state
     const checkUser = async () => {
+      console.log('[App.tsx] checkUser: Starting initial user check.');
       try {
-        console.log('🔍 Initial checkUser function called.');
+        console.log('[App.tsx] checkUser: Before getCurrentUser().');
         const currentUser = await getCurrentUser();
+        console.log('[App.tsx] checkUser: After getCurrentUser(). currentUser:', currentUser);
         if (mounted) {
+          console.log('[App.tsx] checkUser: Before setUser() (mounted).');
           setUser(currentUser);
-          console.log('👤 Initial user set by checkUser:', currentUser ? {
-            id: currentUser.id,
-            email: currentUser.email,
-            gmail_connected: currentUser.gmail_connected,
-            manual_override_active: currentUser.manual_override_active
-          } : 'No user');
+          console.log('[App.tsx] checkUser: After setUser() (mounted).');
         }
       } catch (error) {
-        console.error('❌ Error in initial checkUser:', error);
+        console.error('[App.tsx] checkUser: Error checking user:', error);
       } finally {
         if (mounted) {
-          console.log('🏁 Initial checkUser finished. Setting loading to false.');
+          console.log('[App.tsx] checkUser: Before setLoading(false) in finally block (mounted).');
           setLoading(false);
+          console.log('[App.tsx] checkUser: After setLoading(false) in finally block (mounted).');
         }
       }
     };
@@ -162,7 +146,6 @@ function App() {
     checkUser();
 
     return () => {
-      console.log('🧹 App useEffect cleanup. Unsubscribing from auth state changes.');
       mounted = false;
       subscription.unsubscribe();
     };
@@ -171,19 +154,19 @@ function App() {
   // Handle successful Gmail connection from callback or manual disconnect/reconnect
   const handleGmailConnectionChange = async () => {
     try {
-      console.log('🔄 Gmail connection change handler called');
       const updatedUser = await getCurrentUser();
       setUser(updatedUser);
-      console.log('✅ User state updated after Gmail connection change:', updatedUser?.gmail_connected);
+      // We don't necessarily want to close the setup modal on every connection change,
+      // e.g., after a disconnect, the user might still be in the modal.
+      // Let the modal manage its own closing via onClose prop.
+      // setShowSetup(false);
     } catch (error) {
-      console.error('❌ Error updating user after Gmail connection change:', error);
+      console.error('Error updating user after Gmail connection change:', error);
     }
   };
 
-  console.log('🎨 App render - Loading state:', loading, 'User:', user ? 'Present' : 'None');
-
+  console.log('[App.tsx] Rendering App component. Current loading state:', loading, 'Current user state:', user);
   if (loading) {
-    console.log('⏳ Rendering loading screen');
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center relative overflow-hidden">
         {/* Subtle background elements */}
@@ -261,8 +244,6 @@ function App() {
       </div>
     );
   }
-
-  console.log('🏠 Rendering main application');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 relative overflow-hidden">

@@ -13,6 +13,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
+  console.log('[Dashboard.tsx] Component rendering started. initialUser:', initialUser);
   const [activeTab, setActiveTab] = useState('overview');
   const [user, setUser] = useState<User | null>(initialUser);
   const [manualOverride, setManualOverride] = useState(false);
@@ -20,21 +21,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log('[Dashboard.tsx] useEffect triggered. initialUser:', initialUser);
     setUser(initialUser);
     if (initialUser && initialUser.id) {
+      console.log('[Dashboard.tsx] useEffect: initialUser exists, fetching fresh user data.');
       setLoadingOverrideStatus(true);
       // Fetch the latest user data to get manual_override_active
       // This is important if the initialUser prop might not be fully up-to-date
       // or to ensure we have the field if it was just added.
       const fetchUserData = async () => {
         try {
+          console.log('[Dashboard.tsx] useEffect: Before getCurrentUser().');
           const freshUser = await getCurrentUser(); // getCurrentUser now fetches the 'users' table
+          console.log('[Dashboard.tsx] useEffect: After getCurrentUser(). freshUser:', freshUser);
           if (freshUser) {
             setUser(freshUser); // Update the user state with the fresh data
             setManualOverride(freshUser.manual_override_active ?? false);
           }
         } catch (error) {
-          console.error("Error fetching user data for override status:", error);
+          console.error("[Dashboard.tsx] useEffect: Error fetching user data for override status:", error);
           // Keep initialUser's override status if fetch fails, or default
           if (initialUser?.manual_override_active !== undefined) {
             setManualOverride(initialUser.manual_override_active);
@@ -42,11 +47,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
             setManualOverride(false); // Default if not available
           }
         } finally {
+          console.log('[Dashboard.tsx] useEffect: Before setLoadingOverrideStatus(false) in finally block.');
           setLoadingOverrideStatus(false);
+          console.log('[Dashboard.tsx] useEffect: After setLoadingOverrideStatus(false) in finally block.');
         }
       };
       fetchUserData();
     } else {
+      console.log('[Dashboard.tsx] useEffect: No initialUser or initialUser.id, skipping fetch.');
       setLoadingOverrideStatus(false);
       setManualOverride(false); // Default if no user
     }
