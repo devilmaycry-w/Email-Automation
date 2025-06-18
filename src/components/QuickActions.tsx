@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Zap, RefreshCw, Settings, Download, Upload, Play, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
-import { type User, getGmailTokens, getCurrentUser } from '../lib/supabase';
+import { Zap, RefreshCw, Settings, Download, Upload, Play, Loader2, CheckCircle, AlertCircle, TestTube, RotateCcw } from 'lucide-react';
+import { type User, getGmailTokens, getCurrentUser, updateUserLastPollTimestamp } from '../lib/supabase';
 import { processInbox } from '../lib/emailProcessor';
+import { testGmailConnection } from '../lib/gmail';
 
 interface QuickActionsProps {
   user: User | null;
@@ -29,6 +30,75 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user, onUserUpdate }) => {
         return newResults;
       });
     }, 5000);
+  };
+
+  const handleTestConnection = async () => {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+
+    if (!user.gmail_connected) {
+      setResult('Test Connection', 'error', 'Gmail account not connected. Please connect your Gmail first.');
+      return;
+    }
+
+    setLoading('Test Connection', true);
+    setResult('Test Connection', 'success', 'Testing Gmail API connection...');
+
+    try {
+      // Get Gmail tokens for the user
+      const gmailTokens = await getGmailTokens(user.id);
+      
+      if (!gmailTokens || !gmailTokens.access_token) {
+        throw new Error('Gmail access token not found. Please reconnect your Gmail account.');
+      }
+
+      // Test the connection
+      const testResult = await testGmailConnection(gmailTokens.access_token);
+      
+      if (testResult.success) {
+        setResult('Test Connection', 'success', 
+          `Gmail connection successful! Total messages: ${testResult.totalMessages}, Recent: ${testResult.recentMessages}`);
+      } else {
+        setResult('Test Connection', 'error', `Connection test failed: ${testResult.error}`);
+      }
+
+    } catch (error: any) {
+      console.error('[QuickActions] Error testing connection:', error);
+      setResult('Test Connection', 'error', error.message || 'Failed to test connection. Please try again.');
+    } finally {
+      setLoading('Test Connection', false);
+    }
+  };
+
+  const handleResetTimestamp = async () => {
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
+
+    setLoading('Reset Timestamp', true);
+    setResult('Reset Timestamp', 'success', 'Resetting last poll timestamp...');
+
+    try {
+      // Reset the timestamp to null (will look for all unread emails)
+      await updateUserLastPollTimestamp(user.id, new Date(0).toISOString()); // Use epoch time to get all emails
+      
+      // Refresh user data
+      const updatedUser = await getCurrentUser();
+      if (updatedUser && onUserUpdate) {
+        onUserUpdate(updatedUser);
+      }
+      
+      setResult('Reset Timestamp', 'success', 'Timestamp reset! Next automation run will check all unread emails.');
+
+    } catch (error: any) {
+      console.error('[QuickActions] Error resetting timestamp:', error);
+      setResult('Reset Timestamp', 'error', error.message || 'Failed to reset timestamp. Please try again.');
+    } finally {
+      setLoading('Reset Timestamp', false);
+    }
   };
 
   const handleRunAutomation = async () => {
@@ -110,6 +180,16 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user, onUserUpdate }) => {
       return;
     }
 
+    if (actionName === 'Test Connection') {
+      handleTestConnection();
+      return;
+    }
+
+    if (actionName === 'Reset Timestamp') {
+      handleResetTimestamp();
+      return;
+    }
+
     // Placeholder for other actions
     setResult(actionName, 'success', `${actionName} feature coming soon!`);
     console.log(`${actionName} action triggered`);
@@ -117,11 +197,25 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user, onUserUpdate }) => {
 
   const actions = [
     {
-      title: 'Test Classification',
-      description: 'Test AI with sample emails',
-      icon: Zap,
-      color: 'from-gray-800 to-gray-600',
-      action: () => handleAction('Test classification')
+      title: 'Test Connection',
+      description: 'Test Gmail API access',
+      icon: TestTube,
+      color: 'from-blue-600 to-blue-400',
+      action: () => handleAction('Test Connection')
+    },
+    {
+      title: 'Reset Timestamp',
+      description: 'Reset email polling time',
+      icon: RotateCcw,
+      color: 'from-purple-600 to-purple-400',
+      action: () => handleAction('Reset Timestamp')
+    },
+    {
+      title: 'Run Automation',
+      description: 'Start email processing',
+      icon: Play,
+      color: 'from-gray-800 to-gray-500',
+      action: () => handleAction('Run automation')
     },
     {
       title: 'Refresh Inbox',
@@ -136,20 +230,6 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user, onUserUpdate }) => {
       icon: Download,
       color: 'from-gray-600 to-gray-400',
       action: () => handleAction('Export data')
-    },
-    {
-      title: 'Import Templates',
-      description: 'Upload template files',
-      icon: Upload,
-      color: 'from-gray-500 to-gray-700',
-      action: () => handleAction('Import templates')
-    },
-    {
-      title: 'Run Automation',
-      description: 'Start email processing',
-      icon: Play,
-      color: 'from-gray-800 to-gray-500',
-      action: () => handleAction('Run automation')
     },
     {
       title: 'Advanced Settings',
@@ -176,6 +256,18 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user, onUserUpdate }) => {
             <p className="text-sm text-gray-600">
               <span className="font-medium">Last email check:</span>{' '}
               {new Date(user.last_poll_timestamp).toLocaleString()}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Only emails received after this time will be processed. Use "Reset Timestamp" to check all unread emails.
+            </p>
+          </div>
+        )}
+
+        {!user?.last_poll_timestamp && user && (
+          <div className="mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-200">
+            <p className="text-sm text-blue-700">
+              <span className="font-medium">First time setup:</span> No previous email check found. 
+              The automation will process all unread emails in your inbox.
             </p>
           </div>
         )}
@@ -269,6 +361,19 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user, onUserUpdate }) => {
             </motion.div>
           )
         ))}
+
+        {/* Debug information */}
+        {user && (
+          <div className="mt-6 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+            <h4 className="font-semibold text-gray-800 mb-2">Debug Information</h4>
+            <div className="text-xs text-gray-600 space-y-1">
+              <p><span className="font-medium">User ID:</span> {user.id}</p>
+              <p><span className="font-medium">Gmail Connected:</span> {user.gmail_connected ? 'Yes' : 'No'}</p>
+              <p><span className="font-medium">Manual Override:</span> {user.manual_override_active ? 'Enabled' : 'Disabled'}</p>
+              <p><span className="font-medium">Last Poll:</span> {user.last_poll_timestamp || 'Never'}</p>
+            </div>
+          </div>
+        )}
       </div>
     </motion.div>
   );

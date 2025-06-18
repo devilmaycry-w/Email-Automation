@@ -132,6 +132,12 @@ export const pollNewEmails = async (
     const encodedQuery = encodeURIComponent(query);
     const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodedQuery}`;
 
+    // Enhanced logging for debugging
+    console.log('[Gmail] Polling URL:', url);
+    console.log('[Gmail] Query string:', query);
+    console.log('[Gmail] Last processed timestamp:', lastProcessedTimestamp);
+    console.log('[Gmail] Encoded query:', encodedQuery);
+
     const response = await fetch(url,
       {
         headers: {
@@ -140,16 +146,30 @@ export const pollNewEmails = async (
       }
     );
 
+    console.log('[Gmail] API Response status:', response.status);
+    console.log('[Gmail] API Response headers:', Object.fromEntries(response.headers.entries()));
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('[Gmail] API Error response:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('[Gmail] API Response data:', data);
+    console.log('[Gmail] Number of messages found:', data.messages?.length || 0);
+    console.log('[Gmail] Result size estimate:', data.resultSizeEstimate);
+    
+    // Log first few message IDs for debugging
+    if (data.messages && data.messages.length > 0) {
+      console.log('[Gmail] First few message IDs:', data.messages.slice(0, 3).map((m: any) => m.id));
+    }
+    
     // data.messages is a list of {id, threadId}.
     // data.resultSizeEstimate might be 0 if no new emails.
     return data.messages || [];
   } catch (error) {
-    console.error('Error polling new emails:', error);
+    console.error('[Gmail] Error polling new emails:', error);
     throw error; // Rethrow to be handled by the caller
   }
 };
@@ -157,6 +177,8 @@ export const pollNewEmails = async (
 // Get email details
 export const getEmailDetails = async (accessToken: string, messageId: string) => {
   try {
+    console.log('[Gmail] Fetching details for message ID:', messageId);
+    
     const response = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}`,
       {
@@ -166,14 +188,22 @@ export const getEmailDetails = async (accessToken: string, messageId: string) =>
       }
     );
 
+    console.log('[Gmail] Email details response status:', response.status);
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('[Gmail] Email details error:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('[Gmail] Email details received for message:', messageId);
+    console.log('[Gmail] Email internal date:', data.internalDate);
+    console.log('[Gmail] Email snippet:', data.snippet);
+    
     return data;
   } catch (error) {
-    console.error('Error fetching email details:', error);
+    console.error('[Gmail] Error fetching email details:', error);
     throw error;
   }
 };
@@ -187,6 +217,10 @@ export const sendEmailResponse = async (
   threadId?: string
 ) => {
   try {
+    console.log('[Gmail] Sending email response to:', to);
+    console.log('[Gmail] Subject:', subject);
+    console.log('[Gmail] Thread ID:', threadId);
+    
     const email = [
       `To: ${to}`,
       `Subject: ${subject}`,
@@ -212,20 +246,28 @@ export const sendEmailResponse = async (
       }
     );
 
+    console.log('[Gmail] Send email response status:', response.status);
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('[Gmail] Send email error:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('[Gmail] Email sent successfully, message ID:', data.id);
     return data;
   } catch (error) {
-    console.error('Error sending email response:', error);
+    console.error('[Gmail] Error sending email response:', error);
     throw error;
   }
 };
 
 // Simple AI classification (replace with actual AI service)
 export const classifyEmail = async (subject: string, body: string): Promise<EmailClassification> => {
+  console.log('[Gmail] Classifying email with subject:', subject);
+  console.log('[Gmail] Email body length:', body.length);
+  
   // Define keywords for each category
   const orderInquiryKeywords = [
     'order status', 'where is my order', 'order number', 'purchase inquiry',
@@ -241,35 +283,45 @@ export const classifyEmail = async (subject: string, body: string): Promise<Emai
   
   let orderInquiryScore = 0;
   orderInquiryKeywords.forEach(keyword => {
-    if (text.includes(keyword)) orderInquiryScore++;
+    if (text.includes(keyword)) {
+      orderInquiryScore++;
+      console.log('[Gmail] Found order keyword:', keyword);
+    }
   });
   
   let supportRequestScore = 0;
   supportRequestKeywords.forEach(keyword => {
-    if (text.includes(keyword)) supportRequestScore++;
+    if (text.includes(keyword)) {
+      supportRequestScore++;
+      console.log('[Gmail] Found support keyword:', keyword);
+    }
   });
+  
+  console.log('[Gmail] Classification scores - Order:', orderInquiryScore, 'Support:', supportRequestScore);
   
   // Determine category based on keyword matches
   // If both scores are 0, or they are equal but low, it's general.
   // Otherwise, the higher score determines the category.
   if (orderInquiryScore > supportRequestScore && orderInquiryScore > 0) {
+    console.log('[Gmail] Classified as: order');
     return { category: 'order', confidence: orderInquiryScore };
   } else if (supportRequestScore > orderInquiryScore && supportRequestScore > 0) {
+    console.log('[Gmail] Classified as: support');
     return { category: 'support', confidence: supportRequestScore };
   } else if (orderInquiryScore > 0 && orderInquiryScore === supportRequestScore) {
     // If scores are equal and positive, could be either, let's default to support for now or add more logic
-    // For now, let's prioritize support if scores are equal and positive.
-    // Or, we can sum them up for a general category if that makes more sense.
+    // For now, let's make it 'general' if scores are equal and positive but low, or default to one.
     // Sticking to the prompt, highest score wins, if equal, one must be chosen or be general.
-    // Let's make it 'general' if scores are equal and positive but low, or default to one.
-    // For simplicity, if scores are equal and positive, let's call it 'general' for now.
+    // Let's make it 'general' if scores are equal and positive, for now.
     // This part could be refined based on business rules.
     // Let's re-evaluate: if one category has significantly more keywords, its score might naturally be higher.
     // The request is "simple count of keyword matches".
     // If orderInquiryScore is 1 and supportRequestScore is 1, it's ambiguous.
     // Let's say if scores are equal but positive, it's general.
+    console.log('[Gmail] Classified as: general (equal scores)');
     return { category: 'general', confidence: orderInquiryScore + supportRequestScore }; // Sum of matches as confidence
   } else { // Covers cases where both scores are 0
+    console.log('[Gmail] Classified as: general (no keywords)');
     return { category: 'general', confidence: 0 }; // No relevant keywords found
   }
 };
@@ -284,4 +336,68 @@ export const personalizeTemplate = (template: string, variables: Record<string, 
   });
   
   return personalizedTemplate;
+};
+
+// Debug utility to test Gmail API connection
+export const testGmailConnection = async (accessToken: string) => {
+  try {
+    console.log('[Gmail] Testing Gmail API connection...');
+    
+    // Test basic profile access
+    const profileResponse = await fetch(
+      'https://gmail.googleapis.com/gmail/v1/users/me/profile',
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    console.log('[Gmail] Profile API response status:', profileResponse.status);
+
+    if (!profileResponse.ok) {
+      const errorText = await profileResponse.text();
+      console.error('[Gmail] Profile API error:', errorText);
+      throw new Error(`Profile API error! status: ${profileResponse.status}, body: ${errorText}`);
+    }
+
+    const profileData = await profileResponse.json();
+    console.log('[Gmail] Profile data:', profileData);
+
+    // Test messages list access (without query)
+    const messagesResponse = await fetch(
+      'https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=5',
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    console.log('[Gmail] Messages API response status:', messagesResponse.status);
+
+    if (!messagesResponse.ok) {
+      const errorText = await messagesResponse.text();
+      console.error('[Gmail] Messages API error:', errorText);
+      throw new Error(`Messages API error! status: ${messagesResponse.status}, body: ${errorText}`);
+    }
+
+    const messagesData = await messagesResponse.json();
+    console.log('[Gmail] Messages data:', messagesData);
+    console.log('[Gmail] Total messages in mailbox:', messagesData.resultSizeEstimate);
+
+    return {
+      success: true,
+      profile: profileData,
+      totalMessages: messagesData.resultSizeEstimate,
+      recentMessages: messagesData.messages?.length || 0
+    };
+
+  } catch (error) {
+    console.error('[Gmail] Connection test failed:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
 };
