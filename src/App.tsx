@@ -109,14 +109,17 @@ function App() {
     };
   }, [navigate, location.pathname]);
 
-  // Handle successful Gmail connection from callback
-  const handleGmailConnected = async () => {
+  // Handle successful Gmail connection from callback or manual disconnect/reconnect
+  const handleGmailConnectionChange = async () => {
     try {
       const updatedUser = await getCurrentUser();
       setUser(updatedUser);
-      setShowSetup(false);
+      // We don't necessarily want to close the setup modal on every connection change,
+      // e.g., after a disconnect, the user might still be in the modal.
+      // Let the modal manage its own closing via onClose prop.
+      // setShowSetup(false);
     } catch (error) {
-      console.error('Error updating user after Gmail connection:', error);
+      console.error('Error updating user after Gmail connection change:', error);
     }
   };
 
@@ -249,14 +252,18 @@ function App() {
       <div className="relative z-10">
         <Routes>
           <Route path="/auth" element={<Auth />} />
-          <Route path="/auth/gmail/callback" element={<GmailCallback onSuccess={handleGmailConnected} />} />
+          <Route path="/auth/gmail/callback" element={<GmailCallback onSuccess={handleGmailConnectionChange} />} />
           <Route path="/*" element={
             <>
               <Header user={user} onShowSetup={() => setShowSetup(true)} />
               
               <main className="container mx-auto px-4 py-8">
                 {showSetup ? (
-                  <GmailSetup user={user} onClose={() => setShowSetup(false)} />
+                  <GmailSetup
+                    user={user}
+                    onClose={() => setShowSetup(false)}
+                    onConnectionChange={handleGmailConnectionChange}
+                  />
                 ) : (
                   <Dashboard user={user} />
                 )}

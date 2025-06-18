@@ -76,36 +76,48 @@ const Header: React.FC<HeaderProps> = ({ user, onShowSetup }) => {
                 whileHover={{ scale: 1.05, y: -2 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={handleGmailSetup}
-                className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-gray-800 to-gray-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200"
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 ${
+                  user.gmail_connected
+                    ? 'bg-gradient-to-r from-gray-700 to-gray-500 text-white' // Subtle style for "Gmail Settings"
+                    : 'bg-gradient-to-r from-blue-600 to-blue-400 text-white animate-pulse' // Prominent for "Connect Gmail"
+                }`}
               >
                 <Settings className="w-4 h-4" />
-                <span className="hidden sm:inline">Gmail Setup</span>
+                <span className="hidden sm:inline">
+                  {user.gmail_connected ? 'Gmail Settings' : 'Connect Gmail'}
+                </span>
               </motion.button>
             )}
 
             {user ? (
               <div className="flex items-center space-x-3">
                 <div className="hidden md:flex items-center space-x-3">
+                  {/* User Avatar */}
                   <motion.div
                     whileHover={{ scale: 1.1 }}
                     className="w-10 h-10 bg-gradient-to-r from-gray-300 to-gray-200 rounded-full flex items-center justify-center text-gray-800 font-semibold text-sm shadow-lg"
                   >
-                    {user.email.charAt(0).toUpperCase()}
+                    {user.email?.charAt(0).toUpperCase()}
                   </motion.div>
+                  {/* User Info */}
                   <div>
                     <p className="text-sm font-medium text-gray-900">{user.email}</p>
-                    <div className="flex items-center space-x-1">
+                    <div
+                      className="flex items-center space-x-1 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={handleGmailSetup} // Make this clickable as well for consistency
+                    >
                       <motion.div
-                        animate={{ scale: [1, 1.2, 1] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                        className={`w-2 h-2 rounded-full ${user.gmail_connected ? 'bg-green-500' : 'bg-yellow-500'} shadow-sm`}
+                        animate={{ scale: user.gmail_connected ? [1, 1.2, 1] : [1, 1.3, 1] }}
+                        transition={{ duration: user.gmail_connected ? 2 : 1.5, repeat: Infinity, ease: "easeInOut" }}
+                        className={`w-2.5 h-2.5 rounded-full ${user.gmail_connected ? 'bg-green-500' : 'bg-red-500 shadow-md border-2 border-white'} shadow-sm`}
                       />
-                      <p className="text-xs text-gray-600">
-                        {user.gmail_connected ? 'Gmail Connected' : 'Setup Required'}
+                      <p className={`text-xs font-medium ${user.gmail_connected ? 'text-gray-600' : 'text-red-600 hover:text-red-700'}`}>
+                        {user.gmail_connected ? 'Gmail Connected' : 'Connect Gmail Now'}
                       </p>
                     </div>
                   </div>
                 </div>
+                 {/* Sign Out Button */}
                 <motion.button
                   whileHover={{ scale: 1.05, rotate: 5 }}
                   whileTap={{ scale: 0.95 }}

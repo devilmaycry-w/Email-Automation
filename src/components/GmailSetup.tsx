@@ -1,60 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Mail, Lock, CheckCircle, AlertCircle, X, ExternalLink, Copy } from 'lucide-react';
+import { Mail, CheckCircle, AlertTriangle, X, ExternalLink, Power, Shield, Info, Loader2 } from 'lucide-react';
 import { initializeGmailAuth } from '../lib/gmail';
-import { type User } from '../lib/supabase';
+import { type User, deleteGmailTokens, getCurrentUser } from '../lib/supabase'; // Added deleteGmailTokens & getCurrentUser
 
 interface GmailSetupProps {
   user: User | null;
   onClose: () => void;
+  onConnectionChange?: () => void; // Optional callback to refresh user state in App.tsx
 }
 
-const GmailSetup: React.FC<GmailSetupProps> = ({ user, onClose }) => {
-  const [currentStep, setCurrentStep] = useState(user?.gmail_connected ? 3 : 1);
+const GmailSetup: React.FC<GmailSetupProps> = ({ user, onClose, onConnectionChange }) => {
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const steps = [
-    {
-      id: 1,
-      title: 'Google Cloud Setup',
-      description: 'OAuth 2.0 credentials configured',
-      icon: Lock
-    },
-    {
-      id: 2,
-      title: 'Gmail API Enable',
-      description: 'Enable Gmail API access',
-      icon: Mail
-    },
-    {
-      id: 3,
-      title: 'Connect Account',
-      description: 'Authorize CodexCity',
-      icon: CheckCircle
-    }
-  ];
+  // Local state for gmail_connected, to provide immediate feedback after connect/disconnect
+  const [isConnected, setIsConnected] = useState(user?.gmail_connected || false);
 
-  const redirectURIs = [
-    'http://localhost:5173/auth/gmail/callback',
-    'https://your-domain.com/auth/gmail/callback'
-  ];
+  useEffect(() => {
+    setIsConnected(user?.gmail_connected || false);
+  }, [user?.gmail_connected]);
+
 
   const handleConnect = () => {
     if (!user) {
-      alert('Please sign in first to connect your Gmail account.');
+      setError('Please sign in first to connect your Gmail account.');
       return;
     }
-
+    setError(null);
     setIsConnecting(true);
     
     const config = {
-      clientId: import.meta.env.VITE_GMAIL_CLIENT_ID,
-      clientSecret: import.meta.env.VITE_GMAIL_CLIENT_SECRET,
-      redirectUri: import.meta.env.VITE_GMAIL_REDIRECT_URI
+      clientId: import.meta.env.VITE_GMAIL_CLIENT_ID!,
+      clientSecret: import.meta.env.VITE_GMAIL_CLIENT_SECRET!, // Not strictly needed for client-side init, but good practice
+      redirectUri: import.meta.env.VITE_GMAIL_REDIRECT_URI!
     };
 
-    if (!config.clientId || !config.clientSecret) {
-      alert('Gmail credentials not configured. Please check your environment variables.');
+    if (!config.clientId || !config.redirectUri) {
+      setError('Gmail API credentials are not configured correctly in this application. Please contact support.');
       setIsConnecting(false);
       return;
     }
@@ -62,9 +46,35 @@ const GmailSetup: React.FC<GmailSetupProps> = ({ user, onClose }) => {
     try {
       const authUrl = initializeGmailAuth(config);
       window.location.href = authUrl;
-    } catch (error) {
-      console.error('Error initiating Gmail auth:', error);
+      // The actual token exchange and storage will happen in App.tsx after callback
+    } catch (err) {
+      console.error('Error initiating Gmail auth:', err);
+      setError('Failed to start Gmail connection process. Please try again.');
       setIsConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!user) {
+      setError('User not found.');
+      return;
+    }
+    setError(null);
+    setIsDisconnecting(true);
+    try {
+      const { error: deleteError } = await deleteGmailTokens(user.id);
+      if (deleteError) throw deleteError;
+
+      setIsConnected(false); // Update local state immediately
+      if (onConnectionChange) {
+        onConnectionChange(); // Notify parent to refresh user state
+      }
+      // alert('Gmail disconnected successfully.'); // Optional: provide feedback
+    } catch (err: any) {
+      console.error('Error disconnecting Gmail:', err);
+      setError(`Failed to disconnect Gmail: ${err.message || 'Please try again.'}`);
+    } finally {
+      setIsDisconnecting(false);
     }
   };
 
@@ -73,266 +83,142 @@ const GmailSetup: React.FC<GmailSetupProps> = ({ user, onClose }) => {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[90] p-4" // Increased z-index
     >
       <motion.div
-        initial={{ scale: 0.8, opacity: 0 }}
+        initial={{ scale: 0.9, opacity: 0.7 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.3 }}
-        className="bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-gray-200/50"
+        transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+        className="bg-gradient-to-br from-gray-50 via-white to-gray-100 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-300/50"
       >
-        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-gray-800/10 to-gray-600/10">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Gmail Integration Setup</h2>
-              <p className="text-gray-600 mt-1">Connect your Gmail account for AI-powered email automation</p>
-            </div>
-            <motion.button
-              whileHover={{ scale: 1.1, rotate: 90 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={onClose}
-              className="p-2 text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100 transition-all duration-200"
-            >
-              <X className="w-6 h-6" />
-            </motion.button>
+        <div className="p-6 flex items-center justify-between border-b border-gray-200/80 sticky top-0 bg-gradient-to-r from-gray-50/80 to-gray-100/80 backdrop-blur-sm z-10">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Connect Your Gmail Account</h2>
+            <p className="text-gray-600 mt-1">Enable AI-powered email automation.</p>
           </div>
+          <motion.button
+            whileHover={{ scale: 1.1, rotate: 90 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={onClose}
+            className="p-2 text-gray-500 hover:text-gray-800 rounded-full hover:bg-gray-200/70 transition-all duration-200"
+            aria-label="Close setup"
+          >
+            <X className="w-6 h-6" />
+          </motion.button>
         </div>
 
-        <div className="p-6">
-          {/* Progress Steps */}
-          <div className="flex items-center justify-between mb-8">
-            {steps.map((step, index) => (
-              <div key={step.id} className="flex items-center">
-                <motion.div
-                  initial={{ scale: 0.8 }}
-                  animate={{ scale: currentStep >= step.id ? 1 : 0.8 }}
-                  whileHover={{ scale: currentStep >= step.id ? 1.1 : 0.8 }}
-                  className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all duration-200 ${
-                    currentStep >= step.id
-                      ? 'bg-gradient-to-r from-gray-800 to-gray-600 text-white'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}
-                >
-                  <step.icon className="w-6 h-6" />
-                </motion.div>
-                <div className="ml-3 flex-1">
-                  <p className={`font-medium ${currentStep >= step.id ? 'text-gray-900' : 'text-gray-500'}`}>
-                    {step.title}
-                  </p>
-                  <p className="text-sm text-gray-600">{step.description}</p>
+        <div className="p-6 sm:p-8 space-y-6">
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-50 border-l-4 border-red-400 p-4 rounded-md shadow-sm"
+            >
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <AlertTriangle className="h-5 w-5 text-red-400" aria-hidden="true" />
                 </div>
-                {index < steps.length - 1 && (
-                  <div className={`w-12 h-0.5 mx-4 transition-all duration-300 ${currentStep > step.id ? 'bg-gradient-to-r from-gray-800 to-gray-600' : 'bg-gray-300'}`} />
-                )}
+                <div className="ml-3">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
               </div>
-            ))}
-          </div>
+            </motion.div>
+          )}
 
-          {/* Step Content */}
-          <div className="space-y-6">
-            {currentStep === 1 && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="space-y-6"
+          {isConnected ? (
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} className="space-y-6">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-6 shadow-md text-center">
+                <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                <h3 className="text-xl font-semibold text-green-800 mb-2">Gmail Account Connected!</h3>
+                <p className="text-green-700 text-sm">
+                  CodexCity is now connected to your Gmail account ({user?.email}).
+                  You can now automate email responses and benefit from AI classification.
+                </p>
+              </div>
+              <motion.button
+                whileHover={{ scale: 1.02, boxShadow: "0 10px 20px rgba(0,0,0,0.1)" }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleDisconnect}
+                disabled={isDisconnecting}
+                className="w-full flex items-center justify-center space-x-2 py-3 bg-gradient-to-r from-red-500 to-red-700 hover:from-red-600 hover:to-red-800 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-60"
               >
-                <div className="bg-green-50 border border-green-200 rounded-2xl p-6 shadow-lg">
-                  <div className="flex items-center space-x-3 mb-4">
-                    <CheckCircle className="w-6 h-6 text-green-600" />
-                    <h3 className="font-semibold text-green-800">OAuth 2.0 Credentials Configured!</h3>
-                  </div>
-                  <p className="text-green-700 mb-4">Your Gmail OAuth credentials are already set up and ready to use.</p>
-                  <div className="bg-white/80 rounded-xl p-4 border border-green-200">
-                    <p className="text-sm text-gray-700 mb-2"><strong>Client ID:</strong></p>
-                    <code className="text-xs text-gray-800 bg-gray-100 px-2 py-1 rounded">
-                      {import.meta.env.VITE_GMAIL_CLIENT_ID}
-                    </code>
-                  </div>
+                {isDisconnecting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Power className="w-5 h-5" />
+                )}
+                <span>Disconnect Gmail</span>
+              </motion.button>
+            </motion.div>
+          ) : (
+            <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }} className="space-y-6">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 shadow-md">
+                <div className="flex items-center space-x-3 mb-3">
+                  <Info className="w-6 h-6 text-blue-600 flex-shrink-0" />
+                  <h3 className="text-lg font-semibold text-blue-800">How it Works</h3>
                 </div>
+                <p className="text-sm text-blue-700 mb-3">
+                  Clicking "Connect Gmail" will redirect you to Google's secure sign-in page.
+                  CodexCity uses OAuth 2.0, ensuring we never see or store your password.
+                </p>
 
-                <div className="bg-blue-50 rounded-2xl p-6 shadow-lg border border-blue-200">
-                  <h4 className="font-semibold text-gray-900 mb-3">Authorized Redirect URIs</h4>
-                  <p className="text-gray-600 text-sm mb-4">These redirect URIs are configured in your OAuth 2.0 setup:</p>
-                  <div className="space-y-2">
-                    {redirectURIs.map((uri, index) => (
-                      <div key={index} className="flex items-center justify-between bg-white/80 rounded-xl p-3 border border-blue-200 shadow-sm">
-                        <code className="text-sm text-gray-800">{uri}</code>
-                        <motion.button
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => navigator.clipboard.writeText(uri)}
-                          className="p-1 text-gray-600 hover:text-gray-900 rounded transition-colors"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </motion.button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <motion.button
-                    whileHover={{ scale: 1.05, y: -2 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setCurrentStep(2)}
-                    className="px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-600 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-200"
-                  >
-                    Next: Enable Gmail API
-                  </motion.button>
-                </div>
-              </motion.div>
-            )}
-
-            {currentStep === 2 && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="space-y-6"
-              >
-                <div className="bg-green-50 rounded-2xl p-6 shadow-lg border border-green-200">
-                  <h3 className="font-semibold text-gray-900 mb-4">Step 2: Enable Gmail API</h3>
-                  <div className="space-y-4">
-                    <motion.div
-                      whileHover={{ x: 5 }}
-                      className="flex items-start space-x-3"
-                    >
-                      <div className="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
-                      <div>
-                        <p className="font-medium text-gray-900">Navigate to API Library</p>
-                        <p className="text-gray-600 text-sm">In Google Cloud Console, go to APIs & Services → Library</p>
-                        <motion.a
-                          whileHover={{ scale: 1.02 }}
-                          href="https://console.cloud.google.com/apis/library"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center space-x-2 mt-2 text-blue-600 hover:text-blue-800 font-medium"
-                        >
-                          <span>Open API Library</span>
-                          <ExternalLink className="w-4 h-4" />
-                        </motion.a>
-                      </div>
-                    </motion.div>
-                    <motion.div
-                      whileHover={{ x: 5 }}
-                      className="flex items-start space-x-3"
-                    >
-                      <div className="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
-                      <div>
-                        <p className="font-medium text-gray-900">Search for Gmail API</p>
-                        <p className="text-gray-600 text-sm">Find and select the Gmail API from the library</p>
-                      </div>
-                    </motion.div>
-                    <motion.div
-                      whileHover={{ x: 5 }}
-                      className="flex items-start space-x-3"
-                    >
-                      <div className="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
-                      <div>
-                        <p className="font-medium text-gray-900">Enable the API</p>
-                        <p className="text-gray-600 text-sm">Click the "Enable" button to activate Gmail API access</p>
-                      </div>
-                    </motion.div>
-                  </div>
-                </div>
-
-                <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 shadow-lg">
-                  <div className="flex items-start space-x-3">
-                    <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
-                    <div>
-                      <p className="font-medium text-yellow-800">Ready to Connect</p>
-                      <p className="text-yellow-700 text-sm">Once you've enabled the Gmail API, you can proceed to connect your account.</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-between">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setCurrentStep(1)}
-                    className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-colors"
-                  >
-                    Previous
-                  </motion.button>
-                  <motion.button
-                    whileHover={{ scale: 1.05, y: -2 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleConnect}
-                    disabled={isConnecting}
-                    className="px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-600 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                  >
-                    {isConnecting ? (
-                      <>
-                        <motion.div
-                          animate={{ rotate: 360 }}
-                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                          className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
-                        />
-                        <span>Connecting...</span>
-                      </>
-                    ) : (
-                      <span>Connect Gmail Account</span>
-                    )}
-                  </motion.button>
-                </div>
-              </motion.div>
-            )}
-
-            {currentStep === 3 && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className="text-center space-y-6"
-              >
-                <motion.div
-                  animate={{ scale: [1, 1.1, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto shadow-lg border border-green-200"
-                >
-                  <CheckCircle className="w-12 h-12 text-green-600" />
-                </motion.div>
-                <div>
-                  <h3 className="text-2xl font-bold text-gray-900">Gmail Successfully Connected!</h3>
-                  <p className="text-gray-600 mt-2">Your Gmail account is now integrated with CodexCity. AI-powered email automation is ready to use.</p>
-                </div>
-                <div className="bg-green-50 rounded-2xl p-6 shadow-lg border border-green-200">
-                  <h4 className="font-semibold text-gray-900 mb-3">What's Next?</h4>
-                  <ul className="text-left space-y-2 text-gray-700">
-                    <motion.li
-                      whileHover={{ x: 5 }}
-                      className="flex items-center space-x-2"
-                    >
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span>Customize your email response templates</span>
-                    </motion.li>
-                    <motion.li
-                      whileHover={{ x: 5 }}
-                      className="flex items-center space-x-2"
-                    >
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span>Monitor AI classification accuracy</span>
-                    </motion.li>
-                    <motion.li
-                      whileHover={{ x: 5 }}
-                      className="flex items-center space-x-2"
-                    >
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span>Track automation analytics</span>
-                    </motion.li>
+                <div className="mt-4 space-y-3">
+                  <h4 className="text-md font-semibold text-blue-800">Permissions Requested:</h4>
+                  <ul className="list-disc list-inside text-sm text-blue-700 space-y-1 pl-1">
+                    <li>
+                      <strong>Read, compose, and send emails:</strong> Required to analyze incoming emails, draft replies using your templates, and send them on your behalf.
+                    </li>
+                     <li>
+                      <strong>Manage basic mail settings:</strong> (Optional: if specific settings are needed, otherwise remove) Sometimes needed to organize or label processed emails.
+                    </li>
                   </ul>
                 </div>
-                <motion.button
-                  whileHover={{ scale: 1.05, y: -2 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={onClose}
-                  className="px-8 py-3 bg-gradient-to-r from-gray-800 to-gray-600 text-white rounded-xl font-medium hover:shadow-lg transition-all duration-200"
-                >
-                  Go to Dashboard
-                </motion.button>
-              </motion.div>
-            )}
-          </div>
+              </div>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-6 shadow-md">
+                <div className="flex items-center space-x-3 mb-3">
+                  <Shield className="w-6 h-6 text-gray-600 flex-shrink-0" />
+                  <h3 className="text-lg font-semibold text-gray-800">Your Privacy & Security</h3>
+                </div>
+                <ul className="list-disc list-inside text-sm text-gray-700 space-y-2 pl-1">
+                  <li>CodexCity only accesses your emails to perform the automated tasks you configure.</li>
+                  <li>We are committed to protecting your data. Review our Privacy Policy for details.</li>
+                  <li>
+                    You can manage or revoke CodexCity's access to your Google Account at any time from your
+                    <a
+                      href="https://myaccount.google.com/permissions"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 underline font-medium ml-1"
+                    >
+                      Google Account settings <ExternalLink size={12} className="inline-block ml-0.5" />
+                    </a>.
+                  </li>
+                </ul>
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.02, boxShadow: "0 10px 20px rgba(0,0,0,0.1)" }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleConnect}
+                disabled={isConnecting}
+                className="w-full flex items-center justify-center space-x-2 py-3 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-60"
+              >
+                {isConnecting ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Mail className="w-5 h-5" />
+                )}
+                <span>Connect Gmail Account</span>
+              </motion.button>
+            </motion.div>
+          )}
         </div>
+         <div className="p-4 text-center border-t border-gray-200/80 mt-4">
+            <p className="text-xs text-gray-500">
+              By connecting your Gmail, you agree to CodexCity's Terms of Service and Privacy Policy.
+            </p>
+          </div>
       </motion.div>
     </motion.div>
   );

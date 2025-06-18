@@ -88,7 +88,7 @@ export const refreshAccessToken = async (refreshToken: string, config: GmailConf
   }
 };
 
-// Fetch emails from Gmail
+// Fetch emails from Gmail (can be used as a fallback or for general fetching)
 export const fetchEmails = async (accessToken: string, maxResults: number = 10) => {
   try {
     const response = await fetch(
@@ -109,6 +109,48 @@ export const fetchEmails = async (accessToken: string, maxResults: number = 10) 
   } catch (error) {
     console.error('Error fetching emails:', error);
     throw error;
+  }
+};
+
+// Poll for new emails received after a specific timestamp
+export const pollNewEmails = async (
+  accessToken: string,
+  lastProcessedTimestamp?: string, // ISO 8601 string e.g., "2023-10-26T10:00:00Z"
+  maxResults: number = 100 // Fetch more emails during polling
+): Promise<any[]> => {
+  try {
+    let query = 'is:unread'; // Basic query to fetch unread emails, good for polling
+    if (lastProcessedTimestamp) {
+      const lastProcessedSeconds = Math.floor(new Date(lastProcessedTimestamp).getTime() / 1000);
+      query += ` after:${lastProcessedSeconds}`;
+    } else {
+      // Optional: if no timestamp, fetch emails from the last day or a short period
+      // For simplicity, if no timestamp, we rely on 'is:unread' and maxResults.
+      // Alternatively, one could add: `after:${Math.floor((Date.now() - 24*60*60*1000)/1000)}` for last 24h
+    }
+
+    const encodedQuery = encodeURIComponent(query);
+    const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodedQuery}`;
+
+    const response = await fetch(url,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    // data.messages is a list of {id, threadId}.
+    // data.resultSizeEstimate might be 0 if no new emails.
+    return data.messages || [];
+  } catch (error) {
+    console.error('Error polling new emails:', error);
+    throw error; // Rethrow to be handled by the caller
   }
 };
 
@@ -184,29 +226,51 @@ export const sendEmailResponse = async (
 
 // Simple AI classification (replace with actual AI service)
 export const classifyEmail = async (subject: string, body: string): Promise<EmailClassification> => {
-  // Mock AI classification - replace with actual AI service like Hugging Face
-  const orderKeywords = ['order', 'purchase', 'buy', 'payment', 'invoice', 'delivery', 'shipping', 'product', 'item'];
-  const supportKeywords = ['help', 'support', 'problem', 'issue', 'error', 'bug', 'broken', 'fix', 'trouble'];
-  
+  // Define keywords for each category
+  const orderInquiryKeywords = [
+    'order status', 'where is my order', 'order number', 'purchase inquiry',
+    'invoice request', 'delivery status', 'shipping inquiry', 'product availability'
+  ];
+  const supportRequestKeywords = [
+    'help', 'support', 'assistance', 'problem', 'issue', 'error', 'bug',
+    'technical support', 'cannot login', 'forgot password', 'broken', 'fix'
+  ];
+  // General category will be the fallback if no specific keywords are matched strongly.
+
   const text = (subject + ' ' + body).toLowerCase();
   
-  let orderScore = 0;
-  let supportScore = 0;
-  
-  orderKeywords.forEach(keyword => {
-    if (text.includes(keyword)) orderScore++;
+  let orderInquiryScore = 0;
+  orderInquiryKeywords.forEach(keyword => {
+    if (text.includes(keyword)) orderInquiryScore++;
   });
   
-  supportKeywords.forEach(keyword => {
-    if (text.includes(keyword)) supportScore++;
+  let supportRequestScore = 0;
+  supportRequestKeywords.forEach(keyword => {
+    if (text.includes(keyword)) supportRequestScore++;
   });
   
-  if (orderScore > supportScore && orderScore > 0) {
-    return { category: 'order', confidence: Math.min(orderScore / orderKeywords.length, 1) };
-  } else if (supportScore > 0) {
-    return { category: 'support', confidence: Math.min(supportScore / supportKeywords.length, 1) };
-  } else {
-    return { category: 'general', confidence: 0.5 };
+  // Determine category based on keyword matches
+  // If both scores are 0, or they are equal but low, it's general.
+  // Otherwise, the higher score determines the category.
+  if (orderInquiryScore > supportRequestScore && orderInquiryScore > 0) {
+    return { category: 'order', confidence: orderInquiryScore };
+  } else if (supportRequestScore > orderInquiryScore && supportRequestScore > 0) {
+    return { category: 'support', confidence: supportRequestScore };
+  } else if (orderInquiryScore > 0 && orderInquiryScore === supportRequestScore) {
+    // If scores are equal and positive, could be either, let's default to support for now or add more logic
+    // For now, let's prioritize support if scores are equal and positive.
+    // Or, we can sum them up for a general category if that makes more sense.
+    // Sticking to the prompt, highest score wins, if equal, one must be chosen or be general.
+    // Let's make it 'general' if scores are equal and positive but low, or default to one.
+    // For simplicity, if scores are equal and positive, let's call it 'general' for now.
+    // This part could be refined based on business rules.
+    // Let's re-evaluate: if one category has significantly more keywords, its score might naturally be higher.
+    // The request is "simple count of keyword matches".
+    // If orderInquiryScore is 1 and supportRequestScore is 1, it's ambiguous.
+    // Let's say if scores are equal but positive, it's general.
+    return { category: 'general', confidence: orderInquiryScore + supportRequestScore }; // Sum of matches as confidence
+  } else { // Covers cases where both scores are 0
+    return { category: 'general', confidence: 0 }; // No relevant keywords found
   }
 };
 

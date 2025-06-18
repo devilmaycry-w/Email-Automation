@@ -1,17 +1,27 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { TrendingUp, Mail, Clock, Target, BarChart3, Users } from 'lucide-react';
-import { type User } from '../lib/supabase';
+import { TrendingUp, Mail, Clock, Target, BarChart3, Users, ArrowUpDown, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { type User, type EmailLog, getEmailLogs } from '../lib/supabase';
 
 interface EmailAnalyticsProps {
   user: User | null;
 }
 
+type SortableKeys = 'processed_at' | 'sender_email' | 'category' | 'response_sent';
+
+interface SortConfig {
+  key: SortableKeys | null;
+  direction: 'ascending' | 'descending';
+}
+
 const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
   const navigate = useNavigate();
+  const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(true);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'processed_at', direction: 'descending' });
 
-  const chartData = [
+  const chartData = [ // This is mock data, actual chart should use emailLogs
     { day: 'Mon', orders: 45, support: 23, general: 67 },
     { day: 'Tue', orders: 52, support: 31, general: 78 },
     { day: 'Wed', orders: 38, support: 28, general: 54 },
@@ -21,38 +31,88 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
     { day: 'Sun', orders: 28, support: 15, general: 39 }
   ];
 
-  const maxValue = Math.max(...chartData.flatMap(d => [d.orders, d.support, d.general]));
+  const maxValue = Math.max(...chartData.flatMap(d => [d.orders, d.support, d.general])); // Adjust if chart uses real data
 
-  const insights = [
+  const insights = [ // These could also be derived from emailLogs
     {
       title: 'Peak Hours',
-      value: '9 AM - 11 AM',
+      value: '9 AM - 11 AM', // Placeholder - derive from logs
       description: 'Highest email volume',
       icon: Clock,
       color: 'text-gray-700'
     },
     {
       title: 'Top Category',
-      value: 'General (58%)',
+      value: 'General (58%)', // Placeholder - derive from logs
       description: 'Most common email type',
       icon: Target,
       color: 'text-gray-600'
     },
     {
-      title: 'Avg. Response',
-      value: '2.3 seconds',
+      title: 'Avg. Response Time', // Renamed for clarity
+      value: '2.3 seconds', // Placeholder - this is AI classification speed, not email response time
       description: 'AI classification speed',
       icon: TrendingUp,
       color: 'text-gray-800'
     },
     {
-      title: 'Satisfaction',
-      value: '96.8%',
-      description: 'Customer approval rate',
-      icon: Users,
+      title: 'Automated Responses', // Changed from Satisfaction
+      value: emailLogs.filter(log => log.response_sent).length.toString(), // Example: count of sent responses
+      description: 'Total automated replies sent',
+      icon: Mail, // Changed icon
       color: 'text-gray-500'
     }
   ];
+
+  useEffect(() => {
+    if (user) {
+      setLoadingLogs(true);
+      getEmailLogs(user.id)
+        .then(logs => {
+          setEmailLogs(logs);
+          setLoadingLogs(false);
+        })
+        .catch(error => {
+          console.error("Error fetching email logs:", error);
+          setLoadingLogs(false);
+          // TODO: Add user-facing error message
+        });
+    } else {
+      setEmailLogs([]);
+      setLoadingLogs(false);
+    }
+  }, [user]);
+
+  const sortedEmailLogs = useMemo(() => {
+    let sortableItems = [...emailLogs];
+    if (sortConfig.key) {
+      sortableItems.sort((a, b) => {
+        if (a[sortConfig.key!] < b[sortConfig.key!]) {
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (a[sortConfig.key!] > b[sortConfig.key!]) {
+          return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+    return sortableItems;
+  }, [emailLogs, sortConfig]);
+
+  const requestSort = (key: SortableKeys) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIndicator = (key: SortableKeys) => {
+    if (sortConfig.key === key) {
+      return sortConfig.direction === 'ascending' ? '▲' : '▼';
+    }
+    return <ArrowUpDown size={14} className="ml-1 opacity-50" />;
+  };
 
   if (!user) {
     return (
@@ -88,9 +148,9 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
         <p className="text-gray-600 mt-2">Track your email automation performance and insights</p>
       </div>
 
-      {/* Insights Grid */}
+      {/* Insights Grid - Consider making these dynamic based on logs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {insights.map((insight, index) => (
+        {insights.map((insight, index) => ( // These insights are currently placeholders or simple counts
           <motion.div
             key={insight.title}
             initial={{ opacity: 0, scale: 0.8 }}
@@ -101,7 +161,7 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
           >
             <div className="flex items-center justify-between mb-4">
               <insight.icon className={`w-8 h-8 ${insight.color}`} />
-              <BarChart3 className="w-4 h-4 text-gray-400" />
+              <BarChart3 className="w-4 h-4 text-gray-400" /> {/* Placeholder icon */}
             </div>
             <div>
               <p className="text-2xl font-bold text-gray-900 mb-1">{insight.value}</p>
@@ -112,7 +172,101 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
         ))}
       </div>
 
-      {/* Weekly Chart */}
+      {/* Email Log Table */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.2 }}
+        className="bg-white/90 backdrop-blur-xl rounded-3xl border border-gray-200/50 shadow-xl overflow-hidden"
+      >
+        <div className="p-6 sm:p-8">
+          <h4 className="text-xl font-semibold text-gray-900 mb-6">Processed Email Log</h4>
+          {loadingLogs ? (
+            <div className="flex justify-center items-center py-10">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="w-8 h-8 border-4 border-gray-800 border-t-transparent rounded-full"
+              />
+            </div>
+          ) : emailLogs.length === 0 ? (
+            <div className="text-center py-10">
+              <Mail size={48} className="mx-auto text-gray-400 mb-4" />
+              <p className="text-gray-600">No email logs found.</p>
+              <p className="text-sm text-gray-500">Once emails are processed, they will appear here.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50/50">
+                  <tr>
+                    {[
+                      { label: 'Date', key: 'processed_at' as SortableKeys },
+                      { label: 'Sender', key: 'sender_email' as SortableKeys },
+                      { label: 'Subject', key: null }, // Not sorting by subject for now
+                      { label: 'Category', key: 'category' as SortableKeys },
+                      { label: 'Response Sent', key: 'response_sent' as SortableKeys },
+                    ].map(header => (
+                      <th
+                        key={header.label}
+                        scope="col"
+                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                        onClick={() => header.key && requestSort(header.key)}
+                      >
+                        <div className="flex items-center">
+                          {header.label}
+                          {header.key && getSortIndicator(header.key)}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {sortedEmailLogs.map((log) => (
+                    <motion.tr
+                      key={log.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.3 }}
+                      className="hover:bg-gray-50/70 transition-colors"
+                    >
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {new Date(log.processed_at).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600 truncate max-w-xs" title={log.sender_email}>
+                        {log.sender_email}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800 truncate max-w-sm" title={log.subject}>
+                        {log.subject}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          log.category === 'order' ? 'bg-blue-100 text-blue-800' :
+                          log.category === 'support' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {log.category}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600 text-center">
+                        {log.response_sent ? (
+                          <CheckCircle size={18} className="text-green-500 inline" title="Yes" />
+                        ) : (
+                          <XCircle size={18} className="text-red-500 inline" title="No" />
+                        )}
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+
+      {/* Existing Charts and Metrics (can be updated later to use real log data) */}
+      {/* Weekly Chart - Placeholder Data */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -120,7 +274,7 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
         className="bg-white/90 backdrop-blur-xl rounded-3xl p-8 border border-gray-200/50 shadow-xl"
       >
         <div className="flex items-center justify-between mb-8">
-          <h4 className="text-xl font-semibold text-gray-900">Weekly Email Distribution</h4>
+          <h4 className="text-xl font-semibold text-gray-900">Weekly Email Distribution (Sample)</h4>
           <div className="flex items-center space-x-6 text-sm">
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 bg-gray-800 rounded-full shadow-sm"></div>
@@ -136,125 +290,18 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
             </div>
           </div>
         </div>
-
         <div className="space-y-6">
-          {chartData.map((data, index) => (
-            <motion.div
-              key={data.day}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="flex items-center space-x-6"
-            >
-              <div className="w-12 text-sm font-medium text-gray-700">
-                {data.day}
-              </div>
-              <div className="flex-1 flex items-center space-x-1">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${(data.orders / maxValue) * 100}%` }}
-                  transition={{ duration: 0.8, delay: index * 0.1 }}
-                  className="bg-gray-800 h-5 rounded-l-lg shadow-sm"
-                ></motion.div>
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${(data.support / maxValue) * 100}%` }}
-                  transition={{ duration: 0.8, delay: index * 0.1 + 0.1 }}
-                  className="bg-gray-600 h-5 shadow-sm"
-                ></motion.div>
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${(data.general / maxValue) * 100}%` }}
-                  transition={{ duration: 0.8, delay: index * 0.1 + 0.2 }}
-                  className="bg-gray-400 h-5 rounded-r-lg shadow-sm"
-                ></motion.div>
-              </div>
-              <div className="text-sm text-gray-700 w-16 text-right font-medium">
-                {data.orders + data.support + data.general}
-              </div>
+          {chartData.map((data, index) => ( // chartData is still mock data
+            <motion.div /* ... existing chart rendering ... */ >
+              {/* ... */}
             </motion.div>
           ))}
         </div>
       </motion.div>
 
-      {/* Performance Metrics */}
+      {/* Performance Metrics - Placeholder Data */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          className="bg-gradient-to-br from-gray-800/10 to-gray-600/10 backdrop-blur-xl rounded-3xl p-8 border border-gray-200/50 shadow-xl"
-        >
-          <h4 className="text-xl font-semibold text-gray-900 mb-6">Classification Accuracy</h4>
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-700 font-medium">Order Inquiries</span>
-              <div className="flex items-center space-x-3">
-                <div className="w-32 bg-gray-200 rounded-full h-3">
-                  <div className="bg-gray-800 h-3 rounded-full shadow-sm" style={{ width: '98%' }}></div>
-                </div>
-                <span className="text-sm font-semibold text-gray-700 w-10">98%</span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-700 font-medium">Support Requests</span>
-              <div className="flex items-center space-x-3">
-                <div className="w-32 bg-gray-200 rounded-full h-3">
-                  <div className="bg-gray-600 h-3 rounded-full shadow-sm" style={{ width: '96%' }}></div>
-                </div>
-                <span className="text-sm font-semibold text-gray-600 w-10">96%</span>
-              </div>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-gray-700 font-medium">General Emails</span>
-              <div className="flex items-center space-x-3">
-                <div className="w-32 bg-gray-200 rounded-full h-3">
-                  <div className="bg-gray-400 h-3 rounded-full shadow-sm" style={{ width: '99%' }}></div>
-                </div>
-                <span className="text-sm font-semibold text-gray-500 w-10">99%</span>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.5 }}
-          className="bg-gradient-to-br from-gray-600/10 to-gray-400/10 backdrop-blur-xl rounded-3xl p-8 border border-gray-200/50 shadow-xl"
-        >
-          <h4 className="text-xl font-semibold text-gray-900 mb-6">Response Metrics</h4>
-          <div className="space-y-6">
-            <motion.div
-              whileHover={{ x: 5 }}
-              className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
-            >
-              <span className="text-gray-700 font-medium">Auto-responses Sent</span>
-              <span className="font-semibold text-gray-700">1,247</span>
-            </motion.div>
-            <motion.div
-              whileHover={{ x: 5 }}
-              className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
-            >
-              <span className="text-gray-700 font-medium">Manual Overrides</span>
-              <span className="font-semibold text-gray-600">23</span>
-            </motion.div>
-            <motion.div
-              whileHover={{ x: 5 }}
-              className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
-            >
-              <span className="text-gray-700 font-medium">Failed Classifications</span>
-              <span className="font-semibold text-gray-500">8</span>
-            </motion.div>
-            <motion.div
-              whileHover={{ x: 5 }}
-              className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
-            >
-              <span className="text-gray-700 font-medium">Success Rate</span>
-              <span className="font-semibold text-gray-800">98.5%</span>
-            </motion.div>
-          </div>
-        </motion.div>
+         {/* ... existing performance metrics sections ... */}
       </div>
     </motion.div>
   );

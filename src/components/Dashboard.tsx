@@ -1,19 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Brain, Settings, BarChart3, Clock, CheckCircle } from 'lucide-react';
+import { Mail, Brain, Settings, BarChart3, Clock, CheckCircle, Power, Loader2 } from 'lucide-react';
 import TemplateManager from './TemplateManager';
 import EmailAnalytics from './EmailAnalytics';
 import QuickActions from './QuickActions';
-import { type User } from '../lib/supabase';
+import AppTour from './AppTour'; // Import the AppTour component
+import { type User, updateUserManualOverride, getCurrentUser } from '../lib/supabase';
 
 interface DashboardProps {
   user: User | null;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ user }) => {
+const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
   const [activeTab, setActiveTab] = useState('overview');
+  const [user, setUser] = useState<User | null>(initialUser);
+  const [manualOverride, setManualOverride] = useState(false);
+  const [loadingOverrideStatus, setLoadingOverrideStatus] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setUser(initialUser);
+    if (initialUser && initialUser.id) {
+      setLoadingOverrideStatus(true);
+      // Fetch the latest user data to get manual_override_active
+      // This is important if the initialUser prop might not be fully up-to-date
+      // or to ensure we have the field if it was just added.
+      const fetchUserData = async () => {
+        try {
+          const freshUser = await getCurrentUser(); // getCurrentUser now fetches the 'users' table
+          if (freshUser) {
+            setUser(freshUser); // Update the user state with the fresh data
+            setManualOverride(freshUser.manual_override_active ?? false);
+          }
+        } catch (error) {
+          console.error("Error fetching user data for override status:", error);
+          // Keep initialUser's override status if fetch fails, or default
+          if (initialUser?.manual_override_active !== undefined) {
+            setManualOverride(initialUser.manual_override_active);
+          } else {
+            setManualOverride(false); // Default if not available
+          }
+        } finally {
+          setLoadingOverrideStatus(false);
+        }
+      };
+      fetchUserData();
+    } else {
+      setLoadingOverrideStatus(false);
+      setManualOverride(false); // Default if no user
+    }
+  }, [initialUser]);
+
+  const handleToggleManualOverride = async () => {
+    if (!user) return;
+    const newStatus = !manualOverride;
+    setManualOverride(newStatus); // Optimistic update
+    try {
+      const updatedUser = await updateUserManualOverride(user.id, newStatus);
+      if (updatedUser) {
+        setUser(updatedUser); // Update user state with potentially new updated_at, etc.
+        setManualOverride(updatedUser.manual_override_active ?? false);
+      }
+    } catch (error) {
+      console.error('Failed to update manual override status:', error);
+      setManualOverride(!newStatus); // Revert on error
+    }
+  };
 
   const stats = [
     { label: 'Emails Processed', value: '1,247', icon: Mail, color: 'from-gray-800 to-gray-600', change: '+12%' },
@@ -36,7 +89,8 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 relative"> {/* Added relative for potential positioning contexts */}
+      <AppTour /> {/* Add the AppTour component here */}
       {/* Welcome Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -60,6 +114,19 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           Transform your email management with AI-powered automation. 
           Classify, respond, and engage with your customers effortlessly.
         </motion.p>
+
+        {user && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="mt-2 mb-6" // Adjusted margin for spacing
+          >
+            <p className="text-sm text-center text-gray-500 bg-gray-100/80 rounded-full py-2 px-4 inline-block border border-gray-200 shadow-sm">
+              Free plan: ~100-150 emails/day per user
+            </p>
+          </motion.div>
+        )}
         
         {!user && (
           <motion.div
@@ -85,6 +152,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         )}
       </motion.div>
 
+      {/* Stats Grid */}
       {/* Stats Grid */}
       <motion.div 
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
@@ -127,6 +195,50 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
       {/* Quick Actions */}
       <QuickActions user={user} />
+
+      {/* Manual Override Toggle Section */}
+      {user && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="bg-white/90 backdrop-blur-xl rounded-3xl border border-gray-200/50 shadow-xl p-8"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-xl font-semibold text-gray-900">Manual Override</h4>
+              <p className="text-gray-600 mt-1">
+                {manualOverride
+                  ? 'Automated responses are currently DISABLED.'
+                  : 'Automated responses are currently ENABLED.'}
+              </p>
+            </div>
+            {loadingOverrideStatus ? (
+              <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
+            ) : (
+              <motion.div
+                whileTap={{ scale: 0.95 }}
+                className={`relative inline-flex items-center h-6 rounded-full w-11 cursor-pointer transition-colors duration-300 ${
+                  manualOverride ? 'bg-red-500' : 'bg-green-500'
+                }`}
+                onClick={handleToggleManualOverride}
+              >
+                <span className="sr-only">Toggle Manual Override</span>
+                <motion.span
+                  layout
+                  transition={{ type: "spring", stiffness: 700, damping: 30 }}
+                  className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-300 ${
+                    manualOverride ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </motion.div>
+            )}
+          </div>
+          <p className="text-sm text-gray-500 mt-3">
+            When enabled, you can manually review and send emails. When disabled, the system will send automated responses based on your templates.
+          </p>
+        </motion.div>
+      )}
 
       {/* Tab Navigation */}
       <motion.div

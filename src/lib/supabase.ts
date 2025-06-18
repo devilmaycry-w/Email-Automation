@@ -18,6 +18,7 @@ export interface User {
   id: string
   email?: string
   gmail_connected?: boolean
+  manual_override_active?: boolean // Added for manual override feature
   created_at?: string
   updated_at?: string
 }
@@ -75,19 +76,36 @@ export async function getGmailTokens(userId: string): Promise<GmailTokens | null
 
 // Get current user with Gmail connection status
 export async function getCurrentUser(): Promise<User | null> {
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user: authUser } } = await supabase.auth.getUser()
   
-  if (!user) return null
+  if (!authUser) return null
+
+  // Fetch full user profile from 'users' table
+  const { data: userProfile, error: profileError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', authUser.id)
+    .single()
+
+  if (profileError) {
+    console.error('Error fetching user profile:', profileError.message)
+    // Return basic info from authUser if profile is missing, though this indicates an issue
+    return {
+      id: authUser.id,
+      email: authUser.email,
+      gmail_connected: false, // Cannot determine without profile or tokens call
+      manual_override_active: false, // Default if profile is missing
+      created_at: authUser.created_at,
+      updated_at: authUser.updated_at,
+    } as User
+  }
 
   // Check if user has Gmail tokens using the existing function
-  const gmailTokens = await getGmailTokens(user.id)
+  const gmailTokens = await getGmailTokens(authUser.id)
 
   return {
-    id: user.id,
-    email: user.email,
-    gmail_connected: !!gmailTokens,
-    created_at: user.created_at,
-    updated_at: user.updated_at
+    ...userProfile, // Contains id, email, manual_override_active, etc. from 'users' table
+    gmail_connected: !!gmailTokens, // Overwrite or set based on token check
   } as User
 }
 
@@ -164,6 +182,58 @@ export async function getTemplates(userId: string): Promise<EmailTemplate[]> {
   }
 
   return data || []
+}
+
+// Delete Gmail tokens for a user
+export async function deleteGmailTokens(userId: string): Promise<{ error: Error | null }> {
+  const { error } = await supabase
+    .from('user_gmail_tokens')
+    .delete()
+    .eq('user_id', userId)
+
+  if (error) {
+    console.error('Error deleting Gmail tokens:', error.message)
+    return { error: new Error(`Failed to delete Gmail tokens: ${error.message}`) }
+  }
+
+  return { error: null }
+}
+
+// Log email processing details
+export async function logEmailProcessing(
+  logEntry: Omit<EmailLog, 'id' | 'created_at' | 'user_id'>,
+  userId: string
+): Promise<EmailLog | null> {
+  const { data, error } = await supabase
+    .from('email_logs')
+    .insert([{ ...logEntry, user_id: userId }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error logging email processing:', error.message);
+    // Depending on desired error handling, you might throw, or return null/specific error object
+    throw new Error(`Failed to log email processing: ${error.message}`);
+  }
+
+  return data;
+}
+
+// Update user's manual override status
+export async function updateUserManualOverride(userId: string, status: boolean): Promise<User | null> {
+  const { data, error } = await supabase
+    .from('users')
+    .update({ manual_override_active: status, updated_at: new Date().toISOString() })
+    .eq('id', userId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating manual override status:', error.message)
+    throw new Error(`Failed to update manual override status: ${error.message}`)
+  }
+
+  return data
 }
 
 // Update a template

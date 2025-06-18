@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Zap, Heart, Github, ExternalLink } from 'lucide-react';
+import { Zap, Heart, Github, MessageSquare } from 'lucide-react'; // Ensured MessageSquare is imported, ExternalLink removed
 
 const Footer: React.FC = () => {
   return (
@@ -12,56 +12,48 @@ const Footer: React.FC = () => {
     >
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row items-center justify-between space-y-6 md:space-y-0">
+          {/* Powered by CodexCity Badge */}
           <motion.div
             whileHover={{ scale: 1.02 }}
-            className="flex items-center space-x-4"
+            className="flex items-center" // Removed space-x-4, badge is self-contained
           >
-            <div className="relative">
-              <motion.div
-                animate={{ rotate: [0, 360] }}
-                transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                className="w-12 h-12 bg-gradient-to-r from-gray-900 to-gray-700 rounded-2xl flex items-center justify-center shadow-xl"
-              >
-                <Zap className="w-6 h-6 text-white" />
-              </motion.div>
-              <motion.div
-                animate={{ scale: [1, 1.2, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="absolute -top-1 -right-1 w-4 h-4 bg-gradient-to-r from-gray-300 to-white rounded-full shadow-lg"
-              />
-            </div>
-            <div>
-              <p className="font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent text-lg">
-                Powered by CodexCity
-              </p>
-              <p className="text-xs text-gray-600">AI Email Automation Platform</p>
-            </div>
+            <motion.div
+              whileHover={{ scale: 1.03 }}
+              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition-colors cursor-default"
+            >
+              <Zap className="w-5 h-5" />
+              <span className="text-sm font-semibold">Powered by CodexCity</span>
+            </motion.div>
           </motion.div>
 
-          <div className="flex items-center space-x-8">
+          {/* Links: GitHub and Feedback */}
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-8 gap-y-4">
             <motion.a
               whileHover={{ scale: 1.05, y: -2 }}
               whileTap={{ scale: 0.95 }}
-              href="https://github.com"
+              href="https://github.com/your-repo/codexcity" // TODO: Replace with actual GitHub link
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors group"
             >
               <Github className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-medium">Export to GitHub</span>
+              <span className="text-sm font-medium">View on GitHub</span>
             </motion.a>
             
             <motion.a
               whileHover={{ scale: 1.05, y: -2 }}
               whileTap={{ scale: 0.95 }}
-              href="#"
-              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors group"
+              href="https://forms.gle/example123" // Placeholder Google Form URL
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-2 text-gray-600 hover:text-blue-600 transition-colors group"
             >
-              <ExternalLink className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-medium">Share Live Link</span>
+              <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
+              <span className="text-sm font-medium">Share Feedback</span>
             </motion.a>
           </div>
 
+          {/* Made with Love Section */}
           <motion.div
             whileHover={{ scale: 1.05 }}
             className="flex items-center space-x-2 text-gray-600"
