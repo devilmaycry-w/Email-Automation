@@ -295,7 +295,7 @@ function App() {
       <div className="relative z-10">
         <Routes>
           <Route path="/auth" element={<Auth />} />
-          <Route path="/auth/gmail/callback" element={<GmailCallback onSuccess={handleGmailConnectionChange} />} />
+          <Route path="/auth/gmail/callback" element={<GmailCallback />} />
           <Route path="/*" element={
             <>
               <Header user={user} onShowSetup={() => setShowSetup(true)} />
