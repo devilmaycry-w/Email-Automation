@@ -249,17 +249,39 @@ export const sendEmailResponse = async (
   body: string,
   threadId?: string
 ) => {
+  console.log('[sendEmailResponse] Function called with:');
+  console.log('[sendEmailResponse] To:', to);
+  console.log('[sendEmailResponse] Subject:', subject);
+  console.log('[sendEmailResponse] Body (type):', typeof body);
+  console.log('[sendEmailResponse] Body (snippet):', (typeof body === 'string' ? body.substring(0, 200) : 'Body is not a string or is null/undefined'));
+  console.log('[sendEmailResponse] Thread ID:', threadId);
+
   try {
     const email = [
       `To: ${to}`,
       `Subject: ${subject}`,
       threadId ? `In-Reply-To: ${threadId}` : '',
-      'Content-Type: text/html; charset=utf-8',
+      'Content-Type: text/html; charset=utf-8', // Assuming body is HTML, adjust if plain text
       '',
       body,
     ].join('\n');
 
-    const encodedEmail = btoa(email).replace(/\+/g, '-').replace(/\//g, '_');
+    console.log('[sendEmailResponse] Raw email string before btoa (snippet):', email.substring(0, 500));
+
+    let encodedEmail;
+    try {
+      // Note: btoa can throw if string contains chars outside Latin1 range.
+      // Ensure `body` and `subject` are properly encoded if they can contain arbitrary Unicode.
+      // For this task, we are logging and catching. A more robust solution might involve UTF-8 to Base64 direct conversion.
+      encodedEmail = btoa(email).replace(/\+/g, '-').replace(/\//g, '_');
+    } catch (btoaError: any) {
+      console.error('[sendEmailResponse] Error during btoa() encoding:', btoaError);
+      console.error('[sendEmailResponse] Email string that caused btoa error (snippet):', email.substring(0, 500));
+      throw new Error('Failed to base64 encode email content: ' + btoaError.message);
+    }
+
+    console.log('[sendEmailResponse] Encoded email (first 100 chars):', encodedEmail.substring(0,100));
+
 
     const response = await fetch(
       'https://gmail.googleapis.com/gmail/v1/users/me/messages/send',
@@ -339,13 +361,31 @@ export const classifyEmail = async (subject: string, body: string): Promise<Emai
 
 // Personalize email template
 export const personalizeTemplate = (template: string, variables: Record<string, string>) => {
+  console.log('[personalizeTemplate] Called with template (snippet):', typeof template === 'string' ? template.substring(0, 300) : 'Template is not a string or is null/undefined');
+  console.log('[personalizeTemplate] Variables:', variables);
+
   let personalizedTemplate = template;
   
+  if (typeof template !== 'string') {
+    console.error('[personalizeTemplate] Error: Input template is not a string. Returning original input.');
+    return template; // Or handle error appropriately
+  }
+  if (typeof variables !== 'object' || variables === null) {
+    console.error('[personalizeTemplate] Error: Input variables is not an object or is null. Returning original template string.');
+    return template; // Or handle error appropriately
+  }
+
   Object.entries(variables).forEach(([key, value]) => {
     const placeholder = `[${key}]`;
-    personalizedTemplate = personalizedTemplate.replace(new RegExp(placeholder, 'g'), value);
+    // Ensure value is a string for replacement, default to empty string if not.
+    const replacementValue = (typeof value === 'string' || typeof value === 'number') ? String(value) : '';
+    if (typeof value !== 'string' && typeof value !== 'number' && value !== undefined && value !== null) {
+        console.warn(`[personalizeTemplate] Variable '${key}' has a non-primitive type (${typeof value}), using empty string for replacement.`);
+    }
+    personalizedTemplate = personalizedTemplate.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replacementValue);
   });
   
+  console.log('[personalizeTemplate] Personalized template (snippet):', typeof personalizedTemplate === 'string' ? personalizedTemplate.substring(0, 300) : 'Personalized template is not a string or is null/undefined');
   return personalizedTemplate;
 };
 
