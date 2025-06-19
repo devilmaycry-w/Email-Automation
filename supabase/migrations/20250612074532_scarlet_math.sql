@@ -1,26 +1,36 @@
--- Drop table if exists to fully reset (optional, destructive!)
--- DROP TABLE IF EXISTS email_templates;
+-- 1. Add user_id back and reference auth.users(id)
+ALTER TABLE email_templates
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE;
 
-CREATE TABLE IF NOT EXISTS email_templates (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  -- user_id column removed
-  category email_category NOT NULL,
-  subject text NOT NULL,
-  body text NOT NULL,
-  is_active boolean DEFAULT true,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-  -- UNIQUE(user_id, category) removed
-);
+-- 2. Reinstate unique constraint for per-user category
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'email_templates_user_id_category_key'
+  ) THEN
+    ALTER TABLE email_templates
+      ADD CONSTRAINT email_templates_user_id_category_key UNIQUE(user_id, category);
+  END IF;
+END$$;
 
--- Index updated to remove user_id
-CREATE INDEX IF NOT EXISTS idx_email_templates_category ON email_templates(category);
+-- 3. Enable Row Level Security
+ALTER TABLE email_templates ENABLE ROW LEVEL SECURITY;
 
--- Trigger remains the same
-CREATE TRIGGER update_email_templates_updated_at
-  BEFORE UPDATE ON email_templates
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
+-- 4. Create policy to ensure users can only access their own templates
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE policyname = 'Users can manage own templates'
+      AND tablename = 'email_templates'
+  ) THEN
+    CREATE POLICY "Users can manage own templates" ON email_templates
+      USING (auth.uid() = user_id)
+      WITH CHECK (auth.uid() = user_id);
+  END IF;
+END$$;
 
--- RLS remains disabled (no restrictions)
-ALTER TABLE email_templates DISABLE ROW LEVEL SECURITY;
+-- 5. (Optional) Set user_id to NOT NULL if every template must belong to a user
+ALTER TABLE email_templates
+  ALTER COLUMN user_id SET NOT NULL;
