@@ -99,6 +99,7 @@ export async function getGmailTokens(userId: string): Promise<GmailTokens | null
 
 // Get current user with Gmail connection status
 export async function getCurrentUser(): Promise<User | null> {
+  console.log('[Supabase getCurrentUser] Function called - starting execution.');
   const { data: { user: authUser } } = await supabase.auth.getUser();
   console.log('[Supabase getCurrentUser] supabase.auth.getUser() response:', authUser ? {id: authUser.id, email: authUser.email} : null);
 
