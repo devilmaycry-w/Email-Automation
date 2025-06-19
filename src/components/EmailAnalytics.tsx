@@ -21,7 +21,7 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
   const [loadingLogs, setLoadingLogs] = useState(true);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'processed_at', direction: 'descending' });
 
-  const chartData = [ // This is mock data, actual chart should use emailLogs
+  const chartData = [
     { day: 'Mon', orders: 45, support: 23, general: 67 },
     { day: 'Tue', orders: 52, support: 31, general: 78 },
     { day: 'Wed', orders: 38, support: 28, general: 54 },
@@ -31,35 +31,35 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
     { day: 'Sun', orders: 28, support: 15, general: 39 }
   ];
 
-  const maxValue = Math.max(...chartData.flatMap(d => [d.orders, d.support, d.general])); // Adjust if chart uses real data
+  const maxValue = Math.max(...chartData.flatMap(d => [d.orders, d.support, d.general]));
 
-  const insights = [ // These could also be derived from emailLogs
+  const insights = [
     {
       title: 'Peak Hours',
-      value: '9 AM - 11 AM', // Placeholder - derive from logs
+      value: '9 AM - 11 AM',
       description: 'Highest email volume',
       icon: Clock,
       color: 'text-gray-700'
     },
     {
       title: 'Top Category',
-      value: 'General (58%)', // Placeholder - derive from logs
+      value: 'General (58%)',
       description: 'Most common email type',
       icon: Target,
       color: 'text-gray-600'
     },
     {
-      title: 'Avg. Response Time', // Renamed for clarity
-      value: '2.3 seconds', // Placeholder - this is AI classification speed, not email response time
+      title: 'Avg. Response Time',
+      value: '2.3 seconds',
       description: 'AI classification speed',
       icon: TrendingUp,
       color: 'text-gray-800'
     },
     {
-      title: 'Automated Responses', // Changed from Satisfaction
-      value: emailLogs.filter(log => log.response_sent).length.toString(), // Example: count of sent responses
+      title: 'Automated Responses',
+      value: emailLogs.filter(log => log.response_sent).length.toString(),
       description: 'Total automated replies sent',
-      icon: Mail, // Changed icon
+      icon: Mail,
       color: 'text-gray-500'
     }
   ];
@@ -75,7 +75,6 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
         .catch(error => {
           console.error("Error fetching email logs:", error);
           setLoadingLogs(false);
-          // TODO: Add user-facing error message
         });
     } else {
       setEmailLogs([]);
@@ -144,28 +143,28 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
       className="space-y-8"
     >
       <div>
-        <h3 className="text-3xl font-bold text-gray-900">Email Analytics</h3>
+        <h3 className="text-2xl sm:text-3xl font-bold text-gray-900">Email Analytics</h3>
         <p className="text-gray-600 mt-2">Track your email automation performance and insights</p>
       </div>
 
-      {/* Insights Grid - Consider making these dynamic based on logs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {insights.map((insight, index) => ( // These insights are currently placeholders or simple counts
+      {/* Insights Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {insights.map((insight, index) => (
           <motion.div
             key={insight.title}
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, delay: index * 0.1 }}
             whileHover={{ scale: 1.05 }}
-            className="bg-white/90 backdrop-blur-xl rounded-2xl p-6 border border-gray-200/50 shadow-xl"
+            className="bg-white/90 backdrop-blur-xl rounded-2xl p-4 sm:p-6 border border-gray-200/50 shadow-xl"
           >
             <div className="flex items-center justify-between mb-4">
-              <insight.icon className={`w-8 h-8 ${insight.color}`} />
-              <BarChart3 className="w-4 h-4 text-gray-400" /> {/* Placeholder icon */}
+              <insight.icon className={`w-6 h-6 sm:w-8 sm:h-8 ${insight.color}`} />
+              <BarChart3 className="w-4 h-4 text-gray-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900 mb-1">{insight.value}</p>
-              <p className="text-sm text-gray-800 font-medium mb-1">{insight.title}</p>
+              <p className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">{insight.value}</p>
+              <p className="text-xs sm:text-sm text-gray-800 font-medium mb-1">{insight.title}</p>
               <p className="text-xs text-gray-600">{insight.description}</p>
             </div>
           </motion.div>
@@ -179,8 +178,8 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
         transition={{ duration: 0.6, delay: 0.2 }}
         className="bg-white/90 backdrop-blur-xl rounded-3xl border border-gray-200/50 shadow-xl overflow-hidden"
       >
-        <div className="p-6 sm:p-8">
-          <h4 className="text-xl font-semibold text-gray-900 mb-6">Processed Email Log</h4>
+        <div className="p-4 sm:p-8">
+          <h4 className="text-lg sm:text-xl font-semibold text-gray-900 mb-6">Processed Email Log</h4>
           {loadingLogs ? (
             <div className="flex justify-center items-center py-10">
               <motion.div
@@ -203,14 +202,14 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
                     {[
                       { label: 'Date', key: 'processed_at' as SortableKeys },
                       { label: 'Sender', key: 'sender_email' as SortableKeys },
-                      { label: 'Subject', key: null }, // Not sorting by subject for now
+                      { label: 'Subject', key: null },
                       { label: 'Category', key: 'category' as SortableKeys },
                       { label: 'Response Sent', key: 'response_sent' as SortableKeys },
                     ].map(header => (
                       <th
                         key={header.label}
                         scope="col"
-                        className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+                        className="px-3 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                         onClick={() => header.key && requestSort(header.key)}
                       >
                         <div className="flex items-center">
@@ -230,16 +229,16 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
                       transition={{ duration: 0.3 }}
                       className="hover:bg-gray-50/70 transition-colors"
                     >
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">
+                      <td className="px-3 sm:px-4 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-700">
                         {new Date(log.processed_at).toLocaleString()}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600 truncate max-w-xs" title={log.sender_email}>
+                      <td className="px-3 sm:px-4 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 truncate max-w-xs" title={log.sender_email}>
                         {log.sender_email}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-800 truncate max-w-sm" title={log.subject}>
+                      <td className="px-3 sm:px-4 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-800 truncate max-w-sm" title={log.subject}>
                         {log.subject}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                      <td className="px-3 sm:px-4 py-4 whitespace-nowrap text-xs sm:text-sm">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                           log.category === 'order' ? 'bg-blue-100 text-blue-800' :
                           log.category === 'support' ? 'bg-yellow-100 text-yellow-800' :
@@ -248,7 +247,7 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
                           {log.category}
                         </span>
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-600 text-center">
+                      <td className="px-3 sm:px-4 py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 text-center">
                         {log.response_sent ? (
                           <CheckCircle size={18} className="text-green-500 inline" title="Yes" />
                         ) : (
@@ -264,18 +263,16 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
         </div>
       </motion.div>
 
-
-      {/* Existing Charts and Metrics (can be updated later to use real log data) */}
-      {/* Weekly Chart - Placeholder Data */}
+      {/* Weekly Chart - Sample Data */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.3 }}
-        className="bg-white/90 backdrop-blur-xl rounded-3xl p-8 border border-gray-200/50 shadow-xl"
+        className="bg-white/90 backdrop-blur-xl rounded-3xl p-4 sm:p-8 border border-gray-200/50 shadow-xl"
       >
-        <div className="flex items-center justify-between mb-8">
-          <h4 className="text-xl font-semibold text-gray-900">Weekly Email Distribution (Sample)</h4>
-          <div className="flex items-center space-x-6 text-sm">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 space-y-4 sm:space-y-0">
+          <h4 className="text-lg sm:text-xl font-semibold text-gray-900">Weekly Email Distribution (Sample)</h4>
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-sm">
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 bg-gray-800 rounded-full shadow-sm"></div>
               <span className="text-gray-700 font-medium">Orders</span>
@@ -291,18 +288,46 @@ const EmailAnalytics: React.FC<EmailAnalyticsProps> = ({ user }) => {
           </div>
         </div>
         <div className="space-y-6">
-          {chartData.map((data, index) => ( // chartData is still mock data
-            <motion.div /* ... existing chart rendering ... */ >
-              {/* ... */}
+          {chartData.map((data, index) => (
+            <motion.div
+              key={data.day}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.5, delay: index * 0.1 }}
+              className="space-y-3"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700 w-12">{data.day}</span>
+                <div className="flex-1 mx-4 space-y-1">
+                  <div className="flex space-x-1">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(data.orders / maxValue) * 100}%` }}
+                      transition={{ duration: 1, delay: index * 0.1 }}
+                      className="h-3 bg-gradient-to-r from-gray-800 to-gray-600 rounded-full"
+                    />
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(data.support / maxValue) * 100}%` }}
+                      transition={{ duration: 1, delay: index * 0.1 + 0.2 }}
+                      className="h-3 bg-gradient-to-r from-gray-600 to-gray-400 rounded-full"
+                    />
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(data.general / maxValue) * 100}%` }}
+                      transition={{ duration: 1, delay: index * 0.1 + 0.4 }}
+                      className="h-3 bg-gradient-to-r from-gray-400 to-gray-300 rounded-full"
+                    />
+                  </div>
+                </div>
+                <span className="text-sm text-gray-600 w-16 text-right">
+                  {data.orders + data.support + data.general}
+                </span>
+              </div>
             </motion.div>
           ))}
         </div>
       </motion.div>
-
-      {/* Performance Metrics - Placeholder Data */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-         {/* ... existing performance metrics sections ... */}
-      </div>
     </motion.div>
   );
 };

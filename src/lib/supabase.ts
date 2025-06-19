@@ -26,7 +26,7 @@ export interface User {
 export interface EmailTemplate {
   id?: string
   user_id: string
-  category: 'order' | 'support' | 'general'
+  category: 'order' | 'support' | 'general' | 'feedback' | 'followup' | 'welcome' | 'reengagement' | 'product_review' | 'billing' | 'shipping' | 'refund' | 'technical' | 'partnership' | 'newsletter' | 'appointment' | 'complaint' | 'compliment' | 'survey' | 'urgent' | 'spam'
   subject: string
   body: string
   is_active: boolean
@@ -51,7 +51,7 @@ export interface EmailLog {
   gmail_message_id?: string
   sender_email: string
   subject: string
-  category: 'order' | 'support' | 'general'
+  category: 'order' | 'support' | 'general' | 'feedback' | 'followup' | 'welcome' | 'reengagement' | 'product_review' | 'billing' | 'shipping' | 'refund' | 'technical' | 'partnership' | 'newsletter' | 'appointment' | 'complaint' | 'compliment' | 'survey' | 'urgent' | 'spam'
   confidence_score: number
   response_sent: boolean
   response_template_id?: string
@@ -166,41 +166,69 @@ export async function storeGmailTokens(userId: string, tokens: {
   console.log('[Supabase storeGmailTokens] Tokens stored successfully');
 }
 
-// Create default templates for a user
+// Create default templates for a user with comprehensive categories
 export async function createDefaultTemplates(userId: string): Promise<void> {
   const defaultTemplates = [
     {
       user_id: userId,
       category: 'order' as const,
-      subject: 'Thank you for your order inquiry',
-      body: 'Dear [Name],\n\nThank you for your order inquiry! We have received your request and will process it shortly. You will receive a confirmation email once your order is ready.\n\nIf you have any questions, please don\'t hesitate to contact us.\n\nBest regards,\nCustomer Service Team',
+      subject: 'Thank you for your order inquiry - [TicketID]',
+      body: 'Dear [Name],\n\nThank you for your order inquiry! We have received your request and are processing it with the highest priority.\n\nOrder Details:\n- Inquiry ID: [TicketID]\n- Customer Email: [Email]\n- Subject: [Subject]\n\nOur team will review your order and send you a detailed confirmation within 2-4 hours. You will receive tracking information once your order ships.\n\nIf you have any urgent questions, please don\'t hesitate to contact our customer service team.\n\nBest regards,\nThe CodexCity Team\nCustomer Service Department',
       is_active: true
     },
     {
       user_id: userId,
       category: 'support' as const,
-      subject: 'We received your support request',
-      body: 'Dear [Name],\n\nThank you for contacting our support team. We have received your message and will get back to you within 24 hours.\n\nTicket ID: [TicketID]\n\nIf this is urgent, please call our support line.\n\nBest regards,\nSupport Team',
+      subject: 'We received your support request - [TicketID]',
+      body: 'Dear [Name],\n\nThank you for contacting our support team. We have received your message and understand your concern.\n\nSupport Ticket Details:\n- Ticket ID: [TicketID]\n- Customer Email: [Email]\n- Subject: [Subject]\n\nOur technical support specialists will review your case and respond within 24 hours. For urgent technical issues, please call our priority support line.\n\nWe appreciate your patience and look forward to resolving your inquiry quickly.\n\nBest regards,\nThe CodexCity Team\nTechnical Support Department',
       is_active: true
     },
     {
       user_id: userId,
       category: 'general' as const,
-      subject: 'Thank you for your message',
-      body: 'Dear [Name],\n\nThank you for reaching out to us. We have received your message and will respond as soon as possible. We appreciate your interest in our services.\n\nBest regards,\nCustomer Service Team',
+      subject: 'Thank you for contacting us - [TicketID]',
+      body: 'Dear [Name],\n\nThank you for reaching out to CodexCity. We have received your message and appreciate you taking the time to contact us.\n\nMessage Details:\n- Reference ID: [TicketID]\n- Your Email: [Email]\n- Subject: [Subject]\n\nOur team will review your message and respond as soon as possible. We typically respond to general inquiries within 24-48 hours.\n\nWe value your interest in our services and look forward to assisting you.\n\nBest regards,\nThe CodexCity Team\nCustomer Relations Department',
+      is_active: true
+    },
+    {
+      user_id: userId,
+      category: 'feedback' as const,
+      subject: 'Thank you for your valuable feedback - [TicketID]',
+      body: 'Dear [Name],\n\nThank you for taking the time to share your feedback with us. Your input is incredibly valuable and helps us improve our services.\n\nFeedback Details:\n- Reference ID: [TicketID]\n- Your Email: [Email]\n- Subject: [Subject]\n\nWe take all feedback seriously and will review your suggestions with our product development team. If your feedback requires a direct response, we will get back to you within 3-5 business days.\n\nWe truly appreciate customers like you who help us grow and improve.\n\nBest regards,\nThe CodexCity Team\nProduct Development Department',
+      is_active: true
+    },
+    {
+      user_id: userId,
+      category: 'followup' as const,
+      subject: 'Following up on your inquiry - [TicketID]',
+      body: 'Dear [Name],\n\nWe wanted to follow up on your recent inquiry to ensure you received the information you needed.\n\nOriginal Inquiry:\n- Reference ID: [TicketID]\n- Your Email: [Email]\n- Subject: [Subject]\n\nIf you have any additional questions or need further assistance, please don\'t hesitate to reach out. Our team is here to help you succeed.\n\nWe value your business and look forward to continuing our partnership.\n\nBest regards,\nThe CodexCity Team\nCustomer Success Department',
+      is_active: true
+    },
+    {
+      user_id: userId,
+      category: 'welcome' as const,
+      subject: 'Welcome to CodexCity! Let\'s get you started - [TicketID]',
+      body: 'Dear [Name],\n\nWelcome to CodexCity! We\'re thrilled to have you join our community of innovative businesses.\n\nWelcome Package:\n- Account ID: [TicketID]\n- Your Email: [Email]\n- Getting Started Guide: Attached\n\nTo help you get the most out of our platform, we\'ve prepared a comprehensive onboarding guide. Our customer success team will also reach out within 24 hours to schedule a personalized walkthrough.\n\nIf you have any immediate questions, our support team is ready to assist you.\n\nWelcome aboard!\n\nBest regards,\nThe CodexCity Team\nCustomer Success Department',
+      is_active: true
+    },
+    {
+      user_id: userId,
+      category: 'billing' as const,
+      subject: 'Billing inquiry received - [TicketID]',
+      body: 'Dear [Name],\n\nThank you for contacting us regarding your billing inquiry. We understand the importance of resolving billing matters promptly.\n\nBilling Inquiry Details:\n- Reference ID: [TicketID]\n- Account Email: [Email]\n- Subject: [Subject]\n\nOur billing specialists will review your account and respond within 24 hours with detailed information. For immediate billing concerns, please call our dedicated billing support line.\n\nWe appreciate your business and are committed to resolving this matter quickly.\n\nBest regards,\nThe CodexCity Team\nBilling Department',
       is_active: true
     }
-  ]
+  ];
 
   const { error } = await supabase
     .from('email_templates')
     .upsert(defaultTemplates, {
       onConflict: 'user_id,category',
       ignoreDuplicates: true
-    })
+    });
 
   if (error) {
-    throw new Error(`Failed to create default templates: ${error.message}`)
+    throw new Error(`Failed to create default templates: ${error.message}`);
   }
 }
 

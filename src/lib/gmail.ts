@@ -6,7 +6,7 @@ export interface GmailConfig {
 }
 
 export interface EmailClassification {
-  category: 'order' | 'support' | 'general';
+  category: 'order' | 'support' | 'general' | 'feedback' | 'followup' | 'welcome' | 'reengagement' | 'product_review' | 'billing' | 'shipping' | 'refund' | 'technical' | 'partnership' | 'newsletter' | 'appointment' | 'complaint' | 'compliment' | 'survey' | 'urgent' | 'spam';
   confidence: number;
 }
 
@@ -34,8 +34,6 @@ export const initializeGmailAuth = (config: GmailConfig) => {
 // Exchange authorization code for access token
 export const exchangeCodeForToken = async (code: string, config: GmailConfig): Promise<GmailTokenResponse | null> => {
   console.log('[gmail.ts] exchangeCodeForToken: Attempting to exchange code for token.');
-  console.log('[gmail.ts] exchangeCodeForToken: Using Client ID:', config.clientId);
-  console.log('[gmail.ts] exchangeCodeForToken: Using Redirect URI:', config.redirectUri);
 
   try {
     const response = await fetch('https://oauth2.googleapis.com/token', {
@@ -52,18 +50,15 @@ export const exchangeCodeForToken = async (code: string, config: GmailConfig): P
       }),
     });
 
-    console.log('[gmail.ts] exchangeCodeForToken: Response Status:', response.status);
-
     if (!response.ok) {
       let errorData = null;
       try {
         errorData = await response.json();
-        console.error('[gmail.ts] exchangeCodeForToken: Token exchange error response body:', errorData);
       } catch (e) {
         const textError = await response.text();
-        console.error('[gmail.ts] exchangeCodeForToken: Token exchange error response body (not JSON):', textError);
+        errorData = { error: textError };
       }
-      throw new Error(`HTTP error! status: ${response.status}, Error: ${JSON.stringify(errorData) || 'Unknown error structure'}`);
+      throw new Error(`HTTP error! status: ${response.status}, Error: ${JSON.stringify(errorData)}`);
     }
 
     const data: GmailTokenResponse = await response.json();
@@ -77,7 +72,7 @@ export const exchangeCodeForToken = async (code: string, config: GmailConfig): P
 
 // Refresh access token
 export const refreshAccessToken = async (refreshToken: string, config: GmailConfig): Promise<GmailTokenResponse | null> => {
-  console.log(`[Gmail refreshAccessToken] Called with refresh token present: ${!!refreshToken}`);
+  console.log(`[Gmail refreshAccessToken] Attempting to refresh token`);
 
   if (!refreshToken) {
     console.warn('[Gmail refreshAccessToken] Refresh token is missing!');
@@ -97,8 +92,6 @@ export const refreshAccessToken = async (refreshToken: string, config: GmailConf
         grant_type: 'refresh_token',
       }),
     });
-
-    console.log('[Gmail refreshAccessToken] Google API response status:', response.status);
 
     if (!response.ok) {
       let errorData = null;
@@ -127,11 +120,7 @@ export const pollNewEmails = async (
   lastProcessedTimestamp?: string,
   maxResults: number = 50
 ): Promise<any[]> => {
-  console.log('[Gmail pollNewEmails] Polling for new emails', {
-    hasToken: !!accessToken,
-    lastTimestamp: lastProcessedTimestamp,
-    maxResults
-  });
+  console.log('[Gmail pollNewEmails] Polling for new emails');
 
   try {
     let query = 'in:inbox -in:spam -in:trash';
@@ -147,8 +136,6 @@ export const pollNewEmails = async (
 
     const encodedQuery = encodeURIComponent(query);
     const url = `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodedQuery}`;
-
-    console.log('[Gmail pollNewEmails] Query:', query);
 
     const response = await fetch(url, {
       headers: {
@@ -202,7 +189,7 @@ export const getEmailDetails = async (accessToken: string, messageId: string) =>
   }
 };
 
-// Send email response
+// Send email response with proper formatting
 export const sendEmailResponse = async (
   accessToken: string,
   to: string,
@@ -210,25 +197,24 @@ export const sendEmailResponse = async (
   body: string,
   threadId?: string
 ) => {
-  console.log('[Gmail sendEmailResponse] Sending email response', {
-    to: to.substring(0, 20) + '...',
-    subject: subject.substring(0, 30) + '...',
-    hasThreadId: !!threadId
-  });
+  console.log('[Gmail sendEmailResponse] Sending email response');
 
   try {
-    // Create email in RFC 2822 format
-    const email = [
+    // Create email in RFC 2822 format with proper line breaks
+    const emailLines = [
       `To: ${to}`,
       `Subject: ${subject}`,
       threadId ? `In-Reply-To: ${threadId}` : '',
       threadId ? `References: ${threadId}` : '',
       'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: 7bit',
       '',
-      body,
-    ].filter(line => line !== '').join('\r\n');
+      body.replace(/\n/g, '\r\n'), // Ensure proper line endings
+    ].filter(line => line !== '');
 
-    console.log('[Gmail sendEmailResponse] Email format created');
+    const email = emailLines.join('\r\n');
+
+    console.log('[Gmail sendEmailResponse] Email format created, length:', email.length);
 
     // Encode email as base64url
     const encodedEmail = btoa(unescape(encodeURIComponent(email)))
@@ -271,51 +257,75 @@ export const sendEmailResponse = async (
   }
 };
 
-// Simple AI classification (replace with actual AI service)
+// Enhanced AI classification with more categories
 export const classifyEmail = async (subject: string, body: string): Promise<EmailClassification> => {
-  console.log('[Gmail classifyEmail] Classifying email', {
-    subjectLength: subject.length,
-    bodyLength: body.length
-  });
-
-  // Define keywords for each category
-  const orderInquiryKeywords = [
-    'order status', 'where is my order', 'order number', 'purchase inquiry',
-    'invoice request', 'delivery status', 'shipping inquiry', 'product availability',
-    'order', 'purchase', 'buy', 'payment', 'invoice', 'receipt', 'delivery',
-    'shipping', 'tracking', 'product', 'item'
-  ];
-  
-  const supportRequestKeywords = [
-    'help', 'support', 'assistance', 'problem', 'issue', 'error', 'bug',
-    'technical support', 'cannot login', 'forgot password', 'broken', 'fix',
-    'trouble', 'difficulty', 'not working', 'malfunction', 'repair'
-  ];
+  console.log('[Gmail classifyEmail] Classifying email');
 
   const text = (subject + ' ' + body).toLowerCase();
   
-  let orderInquiryScore = 0;
-  orderInquiryKeywords.forEach(keyword => {
-    const matches = (text.match(new RegExp(keyword, 'g')) || []).length;
-    orderInquiryScore += matches;
-  });
+  // Define comprehensive keyword categories
+  const categories = {
+    order: [
+      'order', 'purchase', 'buy', 'payment', 'invoice', 'receipt', 'delivery',
+      'shipping', 'tracking', 'product', 'item', 'cart', 'checkout', 'transaction'
+    ],
+    support: [
+      'help', 'support', 'assistance', 'problem', 'issue', 'error', 'bug',
+      'technical', 'cannot', 'unable', 'broken', 'fix', 'trouble', 'difficulty'
+    ],
+    billing: [
+      'billing', 'charge', 'payment', 'invoice', 'refund', 'credit', 'subscription',
+      'plan', 'upgrade', 'downgrade', 'cancel', 'renewal', 'account'
+    ],
+    feedback: [
+      'feedback', 'suggestion', 'improve', 'feature', 'request', 'opinion',
+      'review', 'rating', 'experience', 'recommend'
+    ],
+    complaint: [
+      'complaint', 'dissatisfied', 'unhappy', 'disappointed', 'terrible',
+      'awful', 'worst', 'horrible', 'angry', 'frustrated'
+    ],
+    compliment: [
+      'thank', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic',
+      'love', 'appreciate', 'satisfied', 'happy', 'pleased'
+    ],
+    urgent: [
+      'urgent', 'emergency', 'asap', 'immediately', 'critical', 'important',
+      'priority', 'rush', 'deadline', 'time sensitive'
+    ],
+    welcome: [
+      'welcome', 'new', 'getting started', 'onboard', 'setup', 'first time',
+      'introduction', 'begin'
+    ],
+    followup: [
+      'follow up', 'following up', 'check in', 'update', 'status', 'progress',
+      'reminder', 'touching base'
+    ]
+  };
+
+  // Calculate scores for each category
+  const scores: Record<string, number> = {};
   
-  let supportRequestScore = 0;
-  supportRequestKeywords.forEach(keyword => {
-    const matches = (text.match(new RegExp(keyword, 'g')) || []).length;
-    supportRequestScore += matches;
-  });
-  
-  console.log('[Gmail classifyEmail] Scores:', {
-    order: orderInquiryScore,
-    support: supportRequestScore
+  Object.entries(categories).forEach(([category, keywords]) => {
+    let score = 0;
+    keywords.forEach(keyword => {
+      const matches = (text.match(new RegExp(keyword, 'g')) || []).length;
+      score += matches;
+    });
+    scores[category] = score;
   });
 
-  // Determine category based on keyword matches
-  if (orderInquiryScore > supportRequestScore && orderInquiryScore > 0) {
-    return { category: 'order', confidence: Math.min(orderInquiryScore / 5, 1) };
-  } else if (supportRequestScore > orderInquiryScore && supportRequestScore > 0) {
-    return { category: 'support', confidence: Math.min(supportRequestScore / 5, 1) };
+  // Find the category with the highest score
+  const maxScore = Math.max(...Object.values(scores));
+  const bestCategory = Object.entries(scores).find(([_, score]) => score === maxScore)?.[0];
+
+  console.log('[Gmail classifyEmail] Classification scores:', scores);
+
+  if (maxScore > 0 && bestCategory) {
+    return { 
+      category: bestCategory as EmailClassification['category'], 
+      confidence: Math.min(maxScore / 3, 1) 
+    };
   } else {
     return { category: 'general', confidence: 0.5 };
   }
@@ -356,8 +366,6 @@ export const testGmailProfileApi = async (accessToken: string) => {
   const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/profile', {
     headers: { 'Authorization': `Bearer ${accessToken}` },
   });
-
-  console.log('[Gmail testGmailProfileApi] Response Status:', response.status);
 
   if (!response.ok) {
     let errorDetails;

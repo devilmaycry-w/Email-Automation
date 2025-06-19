@@ -105,9 +105,10 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user, onStatsUpdate }) => {
       title: 'Run Automation',
       description: 'Start email processing',
       icon: isProcessing ? Loader2 : Play,
-      color: 'from-gray-800 to-gray-500',
+      color: 'from-purple-600 via-purple-500 to-indigo-600',
       action: handleRunAutomation,
       disabled: isProcessing,
+      isSpecial: true, // Mark this as the special automation button
     },
     {
       title: 'Advanced Settings',
@@ -127,29 +128,50 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user, onStatsUpdate }) => {
         transition={{ duration: 0.6, delay: 0.3 }}
         className="bg-white/90 backdrop-blur-xl rounded-3xl border border-gray-200/50 shadow-xl overflow-hidden"
       >
-        <div className="p-8">
+        <div className="p-6 sm:p-8">
           <h3 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 sm:gap-6">
             {actions.map((actionItem, index) => (
               <motion.button
                 key={actionItem.title}
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, delay: index * 0.1 }}
-                whileHover={{ scale: actionItem.disabled ? 1 : 1.05, y: actionItem.disabled ? 0 : -3 }}
+                whileHover={{ 
+                  scale: actionItem.disabled ? 1 : 1.05, 
+                  y: actionItem.disabled ? 0 : -3,
+                  boxShadow: actionItem.isSpecial && !actionItem.disabled ? "0 0 30px rgba(147, 51, 234, 0.4)" : undefined
+                }}
                 whileTap={{ scale: actionItem.disabled ? 1 : 0.95 }}
                 onClick={actionItem.action}
                 disabled={actionItem.disabled}
-                className="p-6 bg-white/80 rounded-2xl border border-gray-200 hover:shadow-xl transition-all duration-300 group hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`p-4 sm:p-6 bg-white/80 rounded-2xl border border-gray-200 hover:shadow-xl transition-all duration-300 group hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed ${
+                  actionItem.isSpecial ? 'relative overflow-hidden' : ''
+                }`}
               >
+                {actionItem.isSpecial && !actionItem.disabled && (
+                  <motion.div
+                    animate={{
+                      background: [
+                        "linear-gradient(45deg, rgba(147, 51, 234, 0.1), rgba(79, 70, 229, 0.1))",
+                        "linear-gradient(45deg, rgba(79, 70, 229, 0.1), rgba(147, 51, 234, 0.1))",
+                        "linear-gradient(45deg, rgba(147, 51, 234, 0.1), rgba(79, 70, 229, 0.1))"
+                      ]
+                    }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    className="absolute inset-0 rounded-2xl"
+                  />
+                )}
                 <motion.div
                   whileHover={{ scale: actionItem.disabled ? 1 : 1.1, rotate: actionItem.disabled ? 0 : 5 }}
-                  className={`w-14 h-14 bg-gradient-to-r ${actionItem.color} rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg group-hover:shadow-xl transition-all duration-300 ${actionItem.icon === Loader2 ? 'animate-spin' : ''}`}
+                  className={`w-12 h-12 sm:w-14 sm:h-14 bg-gradient-to-r ${actionItem.color} rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-lg group-hover:shadow-xl transition-all duration-300 relative z-10 ${
+                    actionItem.icon === Loader2 ? 'animate-spin' : ''
+                  } ${actionItem.isSpecial && !actionItem.disabled ? 'shadow-purple-500/30' : ''}`}
                 >
-                  <actionItem.icon className="w-7 h-7 text-white" />
+                  <actionItem.icon className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                 </motion.div>
-                <h4 className="font-semibold text-gray-900 text-sm mb-2">{actionItem.title}</h4>
-                <p className="text-xs text-gray-600 leading-tight">{actionItem.description}</p>
+                <h4 className="font-semibold text-gray-900 text-xs sm:text-sm mb-1 sm:mb-2 relative z-10">{actionItem.title}</h4>
+                <p className="text-xs text-gray-600 leading-tight relative z-10">{actionItem.description}</p>
               </motion.button>
             ))}
           </div>
