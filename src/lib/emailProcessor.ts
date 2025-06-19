@@ -9,12 +9,48 @@ import {
 import {
   getTemplates,
   logEmailProcessing,
-  updateUserManualOverride, // Added for checking manual override status
-  getCurrentUser,           // Added for checking manual override status
+  // updateUserManualOverride, // Not directly used in this file, getCurrentUser is used
+  getCurrentUser,
   type EmailTemplate,
   type User,
   type EmailLog
 } from './supabase';
+
+// Helper functions for Base64URL and UTF-8 decoding (Browser-compatible)
+function base64UrlDecodeToBinaryString(base64Url: string): string {
+  if (typeof base64Url !== 'string') { // Ensure input is a string
+    console.error('[EmailProcessor base64UrlDecodeToBinaryString] Input was not a string:', typeof base64Url);
+    return '';
+  }
+  if (!base64Url) return '';
+  let standardBase64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  // Optional: Pad with '=' if necessary. Modern atob is often lenient.
+  // while (standardBase64.length % 4) {
+  //  standardBase64 += '=';
+  // }
+  try {
+    return atob(standardBase64);
+  } catch (e) {
+    console.error('[EmailProcessor base64UrlDecodeToBinaryString] Error in atob decoding:', e, 'Input snippet:', base64Url.substring(0,100));
+    return '';
+  }
+}
+
+function binaryStringToUtf8String(binaryString: string): string {
+  if (typeof binaryString !== 'string') { // Ensure input is a string
+     console.error('[EmailProcessor binaryStringToUtf8String] Input was not a string:', typeof binaryString);
+    return '';
+  }
+  if (!binaryString) return '';
+  try {
+    // Use TextDecoder for robust UTF-8 decoding
+    const uint8Array = Uint8Array.from(binaryString, c => c.charCodeAt(0));
+    return new TextDecoder().decode(uint8Array);
+  } catch (e) {
+    console.error('[EmailProcessor binaryStringToUtf8String] Error in TextDecoder:', e);
+    return '';
+  }
+}
 
 // Helper to extract name from email string (simple version)
 const extractNameFromEmail = (emailSender: string): string => {
@@ -35,21 +71,25 @@ export const processInbox = async (
   // accessToken: string, // No longer passed directly
   lastPollTimestamp?: string // Making this optional as pollNewEmails handles undefined
 ): Promise<{ processedCount: number; newLastPollTimestamp: string; error?: string }> => {
+  console.log(`[EmailProcessor processInbox] Function called. UserID: ${userId}, LastPoll: ${lastPollTimestamp}`);
   let processedCount = 0;
   const currentPollTime = new Date().toISOString();
 
-  console.log(`[EmailProcessor] Starting inbox processing for user ${userId} since ${lastPollTimestamp || 'the beginning'}.`);
+  // console.log(`[EmailProcessor] Starting inbox processing for user ${userId} since ${lastPollTimestamp || 'the beginning'}.`); // Covered by above
 
   try {
     // 0. Check manual override status first
+    console.log('[EmailProcessor processInbox] About to call getCurrentUser().');
     const user = await getCurrentUser();
+    console.log('[EmailProcessor processInbox] getCurrentUser() response:', user);
     if (user?.manual_override_active) {
-      console.log(`[EmailProcessor] User ${userId} has manual override enabled. Skipping automated processing.`);
+      console.log('[EmailProcessor processInbox] Manual override is active. Exiting.');
       return { processedCount: 0, newLastPollTimestamp: lastPollTimestamp || currentPollTime };
     }
 
     // Obtain a valid access token
-    console.log(`[EmailProcessor] Attempting to get valid access token for user ${userId}.`);
+    console.log('[EmailProcessor processInbox] Manual override NOT active or no user. About to call getValidAccessToken.');
+    // console.log(`[EmailProcessor] Attempting to get valid access token for user ${userId}.`); // Covered by above
     const gmailConfig = {
       clientId: import.meta.env.VITE_GMAIL_CLIENT_ID!,
       clientSecret: import.meta.env.VITE_GMAIL_CLIENT_SECRET!, // Needed for refreshAccessToken
@@ -58,20 +98,26 @@ export const processInbox = async (
     // Need to import getValidAccessToken from supabase.ts
     const { getValidAccessToken } = await import('./supabase'); // Assuming path from emailProcessor.ts to supabase.ts
     const validAccessToken = await getValidAccessToken(userId, gmailConfig);
+    console.log('[EmailProcessor processInbox] getValidAccessToken() response:', validAccessToken ? 'Token received' : 'NO Token/Null');
 
     if (!validAccessToken) {
       const errorMessage = `[EmailProcessor] Could not obtain valid Gmail access token for user ${userId}. Skipping email processing. Re-authentication may be required.`;
-      console.error(errorMessage);
+      console.error(errorMessage); // Keep existing error
+      console.log('[EmailProcessor processInbox] No valid access token. Exiting with error message.'); // Add specific exit log
       // TODO: Consider setting a flag on the user's profile in DB to indicate re-auth needed.
       return { processedCount: 0, newLastPollTimestamp: lastPollTimestamp || currentPollTime, error: 'Failed to get valid token' };
     }
-    console.log(`[EmailProcessor] Successfully obtained valid access token for user ${userId}.`);
+    // console.log(`[EmailProcessor] Successfully obtained valid access token for user ${userId}.`); // Covered by getValidAccessToken log
 
     // 1. Poll for new emails
+    console.log('[EmailProcessor processInbox] Access token obtained. About to call pollNewEmails.');
     const messages = await pollNewEmails(validAccessToken, lastPollTimestamp);
+    console.log('[EmailProcessor processInbox] pollNewEmails() response: Message count:', messages ? messages.length : 'null/undefined');
+
 
     if (!messages || messages.length === 0) {
-      console.log(`No new messages for user ${userId} since ${lastPollTimestamp || 'the beginning'}.`);
+      // console.log(`No new messages for user ${userId} since ${lastPollTimestamp || 'the beginning'}.`); // Covered by pollNewEmails log
+      console.log('[EmailProcessor processInbox] No new messages or messages array is null. Exiting.');
       return { processedCount: 0, newLastPollTimestamp: currentPollTime };
     }
 
@@ -104,30 +150,61 @@ export const processInbox = async (
         const senderEmail = fromHeader ? fromHeader.value : 'Unknown Sender';
         const gmailMessageId = messageIdHeader ? messageIdHeader.value : message.id; // Use API message ID if header is missing
 
-        // Extract body (simplistic, might need improvement for multipart emails)
-        let body = '';
+        let bodyText = ''; // Use a different variable name for clarity
+
+        const processPart = (part: any, partIdentifier: string) => {
+          if (part && part.body && typeof part.body.data === 'string' && part.body.data.length > 0) {
+            console.log(`[EmailProcessor] Attempting to decode ${partIdentifier}. MimeType:`, part.mimeType, 'Raw data snippet:', part.body.data.substring(0, 70));
+            const decodedBinary = base64UrlDecodeToBinaryString(part.body.data);
+            if (!decodedBinary && part.body.data.length > 0) { // Check if decoding itself failed for non-empty data
+                console.error(`[EmailProcessor] base64UrlDecodeToBinaryString returned empty for non-empty input from ${partIdentifier}. MimeType:`, part.mimeType);
+            }
+            let decodedUtf8 = binaryStringToUtf8String(decodedBinary);
+            if (!decodedUtf8 && decodedBinary.length > 0) { // Check if UTF-8 conversion failed
+                 console.error(`[EmailProcessor] binaryStringToUtf8String returned empty for non-empty binary string from ${partIdentifier}. MimeType:`, part.mimeType);
+            }
+            console.log(`[EmailProcessor] Decoded ${partIdentifier} body snippet (before potential HTML strip):`, decodedUtf8.substring(0, 150));
+            if (part.mimeType === 'text/html') {
+              decodedUtf8 = decodedUtf8.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); // Strip HTML
+              console.log(`[EmailProcessor] HTML part from ${partIdentifier} stripped, snippet:`, decodedUtf8.substring(0, 150));
+            }
+            return decodedUtf8;
+          }
+          console.log(`[EmailProcessor] Part ${partIdentifier} (MimeType: ${part?.mimeType}) had no data, data was not a string, or data was empty.`);
+          return '';
+        };
+
         if (emailDetails.payload.parts) {
-          const part = emailDetails.payload.parts.find((p:any) => p.mimeType === 'text/plain');
-          if (part && part.body && part.body.data) {
-            body = Buffer.from(part.body.data, 'base64').toString('utf-8');
-          } else { // Fallback to html part if plain text not found
-            const htmlPart = emailDetails.payload.parts.find((p:any) => p.mimeType === 'text/html');
-            if (htmlPart && htmlPart.body && htmlPart.body.data) {
-               // Basic HTML to text conversion for now
-              body = Buffer.from(htmlPart.body.data, 'base64').toString('utf-8');
-              body = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          console.log('[EmailProcessor] Email is multipart. Processing parts.');
+          // Prefer text/plain
+          const plainPart = emailDetails.payload.parts.find((p: any) => p.mimeType === 'text/plain');
+          if (plainPart) {
+            console.log('[EmailProcessor] Found text/plain part.');
+            bodyText = processPart(plainPart, 'text/plain part');
+          }
+
+          // Fallback to text/html if plain not found or resulted in empty bodyText
+          if (!bodyText) {
+            const htmlPart = emailDetails.payload.parts.find((p: any) => p.mimeType === 'text/html');
+            if (htmlPart) {
+              console.log('[EmailProcessor] No usable text/plain part or it was empty. Found text/html part.');
+              bodyText = processPart(htmlPart, 'text/html part');
+            } else {
+              console.log('[EmailProcessor] No text/plain or text/html part found in multipart email.');
             }
           }
-        } else if (emailDetails.payload.body && emailDetails.payload.body.data) {
-          body = Buffer.from(emailDetails.payload.body.data, 'base64').toString('utf-8');
-           if (emailDetails.payload.mimeType === 'text/html') {
-             body = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-           }
+        } else if (emailDetails.payload.body && typeof emailDetails.payload.body.data === 'string' && emailDetails.payload.body.data.length > 0) {
+          // Handle non-multipart email
+          console.log('[EmailProcessor] Email is not multipart. Processing payload.body.data.');
+          bodyText = processPart(emailDetails.payload, 'non-multipart body'); // Pass the payload itself as a 'part-like' object
+        } else {
+          console.log('[EmailProcessor] No parts and no direct body.data found or body.data was empty/not a string.');
         }
 
-        if (!body) {
-            console.log(`Email ${message.id} has no parsable body content. Skipping.`);
-            // Optionally log this skipped email with minimal info
+        console.log('[EmailProcessor] Final decoded bodyText length:', bodyText.length);
+        if (!bodyText) {
+            console.warn(`[EmailProcessor] Email ${message.id} resulted in an empty body after decoding/processing. Skipping classification and reply.`);
+            // Log this skipped email with minimal info
             await logEmailProcessing({
               gmail_message_id: gmailMessageId,
               sender_email: senderEmail,
@@ -137,14 +214,13 @@ export const processInbox = async (
               response_sent: false,
               response_template_id: undefined,
               processed_at: new Date().toISOString(),
-              // error_message: "No parsable body content" // Could add an error field to logs
+              // error_message: "Empty body after decoding" // Could add an error field to logs
             }, userId);
             continue;
         }
 
-
         // 4. Classify email
-        const classification: EmailClassification = await classifyEmail(subject, body);
+        const classification: EmailClassification = await classifyEmail(subject, bodyText);
 
         // 5. Select template
         const template = activeTemplates.find(t => t.category === classification.category);

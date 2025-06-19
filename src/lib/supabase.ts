@@ -370,20 +370,48 @@ export async function deleteGmailTokens(userId: string): Promise<{ error: Error 
 // Log email processing details
 export async function logEmailProcessing(
   logEntry: Omit<EmailLog, 'id' | 'created_at' | 'user_id'>,
-  userId: string
+  userId: string // This should be auth.uid() from the caller
 ): Promise<EmailLog | null> {
+  // Log the userId received by the function AND the current auth.uid() if possible from this context
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+  const currentAuthUid = sessionData?.session?.user?.id;
+
+  console.log(`[Supabase logEmailProcessing] Called for (passed in) userId: ${userId}`);
+  if(sessionError) {
+    console.error('[Supabase logEmailProcessing] Error fetching session:', sessionError.message);
+  } else {
+    console.log(`[Supabase logEmailProcessing] Current session auth.uid(): ${currentAuthUid}`);
+  }
+
+  if (!userId) {
+    console.error('[Supabase logEmailProcessing] CRITICAL: userId parameter is null or undefined. Cannot insert log.');
+    // throw new Error('userId parameter is null or undefined for logEmailProcessing'); // Or return null if preferred by caller
+    return null;
+  }
+  if (currentAuthUid && userId !== currentAuthUid) {
+    console.warn(`[Supabase logEmailProcessing] WARNING: Passed userId (${userId}) does not match current session auth.uid() (${currentAuthUid}). This might cause RLS issues if RLS is based on auth.uid().`);
+  }
+
+  const logDataToInsert = { ...logEntry, user_id: userId };
+  console.log('[Supabase logEmailProcessing] Attempting to insert log data:', logDataToInsert);
+
   const { data, error } = await supabase
     .from('email_logs')
-    .insert([{ ...logEntry, user_id: userId }])
+    .insert([logDataToInsert]) // Ensure it's an array of objects
     .select()
     .single();
 
   if (error) {
-    console.error('Error logging email processing:', error.message);
-    // Depending on desired error handling, you might throw, or return null/specific error object
+    console.error('[Supabase logEmailProcessing] Error inserting email log:', error.message, error); // Log full error object
+    // Consider the specific error message: "new row violates row-level security policy"
+    if (error.message.includes('violates row-level security policy') || error.message.includes('RLS')) {
+        console.error(`[Supabase logEmailProcessing] RLS VIOLATION LIKELY: This means the policy check failed.
+        Auth UID from session: ${currentAuthUid}, user_id in attempted insert: ${userId}`);
+    }
     throw new Error(`Failed to log email processing: ${error.message}`);
   }
 
+  console.log('[Supabase logEmailProcessing] Email log inserted successfully. Returned data:', data);
   return data;
 }
 
