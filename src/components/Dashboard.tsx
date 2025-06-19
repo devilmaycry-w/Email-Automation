@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Brain, Settings, BarChart3, Clock, CheckCircle, Power, Loader2, TrendingUp, Users, RefreshCw, Sparkles } from 'lucide-react';
+import { Mail, Brain, Settings, BarChart3, Clock, CheckCircle, Power, Loader2, TrendingUp, Users, RefreshCw, Sparkles, AlertTriangle } from 'lucide-react';
 import TemplateManager from './TemplateManager';
 import EmailAnalytics from './EmailAnalytics';
 import QuickActions from './QuickActions';
 import AppTour from './AppTour';
 import GmailTestButton from './GmailTestButton';
-import { type User, updateUserManualOverride, getCurrentUser, getEmailStats } from '../lib/supabase';
+import { type User, updateUserManualOverride, getCurrentUser, getEmailStats, checkDailyUsageLimit } from '../lib/supabase';
 
 interface DashboardProps {
   user: User | null;
@@ -21,6 +21,13 @@ interface EmailStats {
   categoryBreakdown: Record<string, number>;
 }
 
+interface UsageLimit {
+  todayCount: number;
+  isNearLimit: boolean;
+  isOverLimit: boolean;
+  resetTime: string;
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
   const [activeTab, setActiveTab] = useState('overview');
   const [user, setUser] = useState<User | null>(initialUser);
@@ -32,6 +39,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
     todayProcessed: 0,
     todaySent: 0,
     categoryBreakdown: {}
+  });
+  const [usageLimit, setUsageLimit] = useState<UsageLimit>({
+    todayCount: 0,
+    isNearLimit: false,
+    isOverLimit: false,
+    resetTime: new Date().toISOString()
   });
   const [loadingStats, setLoadingStats] = useState(true);
   const navigate = useNavigate();
@@ -63,8 +76,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
 
       const fetchEmailStats = async () => {
         try {
-          const stats = await getEmailStats(initialUser.id);
+          const [stats, usage] = await Promise.all([
+            getEmailStats(initialUser.id),
+            checkDailyUsageLimit(initialUser.id)
+          ]);
           setEmailStats(stats);
+          setUsageLimit(usage);
         } catch (error) {
           console.error('Error fetching email stats:', error);
         } finally {
@@ -101,8 +118,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
     if (!user?.id) return;
     try {
       setLoadingStats(true);
-      const stats = await getEmailStats(user.id);
+      const [stats, usage] = await Promise.all([
+        getEmailStats(user.id),
+        checkDailyUsageLimit(user.id)
+      ]);
       setEmailStats(stats);
+      setUsageLimit(usage);
     } catch (error) {
       console.error('Error refreshing stats:', error);
     } finally {
@@ -158,9 +179,44 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
     }
   };
 
+  const getResetTimeFormatted = () => {
+    const resetDate = new Date(usageLimit.resetTime);
+    const now = new Date();
+    const diffHours = Math.ceil((resetDate.getTime() - now.getTime()) / (1000 * 60 * 60));
+    return diffHours <= 24 ? `${diffHours} hours` : '24 hours';
+  };
+
   return (
     <div className="space-y-8 relative min-h-screen">
       <AppTour />
+      
+      {/* Usage Limit Warning */}
+      {user && (usageLimit.isNearLimit || usageLimit.isOverLimit) && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`p-4 rounded-2xl border-2 ${
+            usageLimit.isOverLimit 
+              ? 'bg-red-50 border-red-200 text-red-800' 
+              : 'bg-yellow-50 border-yellow-200 text-yellow-800'
+          } shadow-lg`}
+        >
+          <div className="flex items-center space-x-3">
+            <AlertTriangle className={`w-6 h-6 ${usageLimit.isOverLimit ? 'text-red-600' : 'text-yellow-600'}`} />
+            <div className="flex-1">
+              <h4 className="font-semibold">
+                {usageLimit.isOverLimit ? 'Daily Limit Reached!' : 'Approaching Daily Limit'}
+              </h4>
+              <p className="text-sm mt-1">
+                {usageLimit.isOverLimit 
+                  ? `You've sent ${usageLimit.todayCount}/100 automated emails today. Your automation system will reset in ${getResetTimeFormatted()}. No worries, clients won't miss you! 😊`
+                  : `You've sent ${usageLimit.todayCount}/100 automated emails today. You're approaching your daily limit.`
+                }
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      )}
       
       {/* Welcome Section */}
       <motion.div
@@ -339,9 +395,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
                 </motion.div>
               )}
             </div>
-            <p className="text-sm text-gray-500">
-              When enabled, you can manually review and send emails. When disabled, the system will send automated responses based on your templates.
-            </p>
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mt-4">
+              <h5 className="font-semibold text-blue-900 mb-2">How Manual Override Works:</h5>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li><strong>Enabled (Red):</strong> You manually review and send each email response</li>
+                <li><strong>Disabled (Green):</strong> System automatically sends responses based on your templates</li>
+                <li><strong>Use Case:</strong> Enable when you want full control, disable for automation</li>
+              </ul>
+            </div>
           </motion.div>
 
           <motion.div

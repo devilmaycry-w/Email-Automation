@@ -247,6 +247,25 @@ export async function getTemplates(userId: string): Promise<EmailTemplate[]> {
   return data || []
 }
 
+// Create a new template
+export async function createTemplate(template: Omit<EmailTemplate, 'id' | 'created_at' | 'updated_at'>): Promise<EmailTemplate | null> {
+  console.log('[Supabase createTemplate] Creating new template for user:', template.user_id);
+
+  const { data, error } = await supabase
+    .from('email_templates')
+    .insert([template])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[Supabase createTemplate] Error creating template:', error);
+    throw new Error(`Failed to create template: ${error.message}`);
+  }
+
+  console.log('[Supabase createTemplate] Template created successfully');
+  return data;
+}
+
 // Utility to get a valid access token, refreshing if necessary
 export async function getValidAccessToken(
   userId: string,
@@ -474,5 +493,47 @@ export async function getEmailStats(userId: string): Promise<{
     todayProcessed: todayLogs.length,
     todaySent: todayLogs.filter(log => log.response_sent).length,
     categoryBreakdown
+  };
+}
+
+// Check daily usage limit (100 emails per day for free plan)
+export async function checkDailyUsageLimit(userId: string): Promise<{
+  todayCount: number;
+  isNearLimit: boolean;
+  isOverLimit: boolean;
+  resetTime: string;
+}> {
+  const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  
+  const { data, error } = await supabase
+    .from('email_logs')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('response_sent', true)
+    .gte('processed_at', `${today}T00:00:00.000Z`)
+    .lt('processed_at', `${today}T23:59:59.999Z`);
+
+  if (error) {
+    console.error('Error checking daily usage:', error);
+    return {
+      todayCount: 0,
+      isNearLimit: false,
+      isOverLimit: false,
+      resetTime: tomorrow.toISOString()
+    };
+  }
+
+  const todayCount = data?.length || 0;
+  const DAILY_LIMIT = 100;
+  const NEAR_LIMIT_THRESHOLD = 80; // 80% of limit
+
+  return {
+    todayCount,
+    isNearLimit: todayCount >= NEAR_LIMIT_THRESHOLD && todayCount < DAILY_LIMIT,
+    isOverLimit: todayCount >= DAILY_LIMIT,
+    resetTime: tomorrow.toISOString()
   };
 }

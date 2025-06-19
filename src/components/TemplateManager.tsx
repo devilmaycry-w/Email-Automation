@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Edit3, Save, X, Plus, Mail, MessageSquare, HelpCircle, Heart, Users, Star, AlertTriangle, DollarSign, Truck, RefreshCw, Wrench, Handshake, FileText, Calendar, Frown, Smile, BarChart3, Clock, Zap } from 'lucide-react';
-import { getTemplates, updateTemplate, type User, type EmailTemplate } from '../lib/supabase';
+import { Edit3, Save, X, Plus, Mail, MessageSquare, HelpCircle, Heart, Users, Star, AlertTriangle, DollarSign, Truck, RefreshCw, Wrench, Handshake, FileText, Calendar, Frown, Smile, BarChart3, Clock, Zap, Check } from 'lucide-react';
+import { getTemplates, updateTemplate, createTemplate, type User, type EmailTemplate } from '../lib/supabase';
 
 interface TemplateManagerProps {
   user: User | null;
@@ -13,6 +13,14 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ user }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ subject: '', body: '' });
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    category: 'general' as EmailTemplate['category'],
+    subject: '',
+    body: '',
+    is_active: true
+  });
+  const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
 
   const templateConfig = [
@@ -198,12 +206,42 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ user }) => {
     setEditForm({ subject: '', body: '' });
   };
 
+  const handleCreateTemplate = async () => {
+    if (!user || creating) return;
+
+    setCreating(true);
+    try {
+      const newTemplate = await createTemplate({
+        user_id: user.id,
+        category: createForm.category,
+        subject: createForm.subject,
+        body: createForm.body,
+        is_active: createForm.is_active
+      });
+
+      if (newTemplate) {
+        setTemplates(prev => [...prev, newTemplate]);
+        setShowCreateModal(false);
+        setCreateForm({
+          category: 'general',
+          subject: '',
+          body: '',
+          is_active: true
+        });
+      }
+    } catch (error) {
+      console.error('Error creating template:', error);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const handleAddTemplate = () => {
     if (!user) {
       navigate('/auth');
       return;
     }
-    console.log('Add template functionality');
+    setShowCreateModal(true);
   };
 
   if (!user) {
@@ -383,6 +421,132 @@ const TemplateManager: React.FC<TemplateManagerProps> = ({ user }) => {
           );
         })}
       </div>
+
+      {/* Create Template Modal */}
+      <AnimatePresence>
+        {showCreateModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0.7 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 15, stiffness: 200 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-2xl font-bold text-gray-900">Create New Template</h3>
+                  <motion.button
+                    whileHover={{ scale: 1.1, rotate: 90 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => setShowCreateModal(false)}
+                    className="p-2 text-gray-500 hover:text-gray-800 rounded-full hover:bg-gray-100 transition-all duration-200"
+                  >
+                    <X className="w-6 h-6" />
+                  </motion.button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Category</label>
+                  <select
+                    value={createForm.category}
+                    onChange={(e) => setCreateForm({ ...createForm, category: e.target.value as EmailTemplate['category'] })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900"
+                  >
+                    {templateConfig.map(config => (
+                      <option key={config.category} value={config.category}>
+                        {config.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Subject Line</label>
+                  <input
+                    type="text"
+                    value={createForm.subject}
+                    onChange={(e) => setCreateForm({ ...createForm, subject: e.target.value })}
+                    placeholder="Enter email subject..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-all duration-200 bg-white text-gray-900 placeholder-gray-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">Email Body</label>
+                  <textarea
+                    value={createForm.body}
+                    onChange={(e) => setCreateForm({ ...createForm, body: e.target.value })}
+                    rows={10}
+                    placeholder="Enter email body content..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-transparent transition-all duration-200 resize-none bg-white text-gray-900 placeholder-gray-500"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    id="is_active"
+                    checked={createForm.is_active}
+                    onChange={(e) => setCreateForm({ ...createForm, is_active: e.target.checked })}
+                    className="w-4 h-4 text-gray-600 bg-gray-100 border-gray-300 rounded focus:ring-gray-500"
+                  />
+                  <label htmlFor="is_active" className="text-sm font-medium text-gray-700">
+                    Activate this template immediately
+                  </label>
+                </div>
+
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <p className="text-sm text-gray-700">
+                    <strong>Available variables:</strong> [Name], [Email], [Subject], [TicketID], [OrderNumber]
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex justify-end space-x-4">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-colors font-medium"
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleCreateTemplate}
+                  disabled={creating || !createForm.subject || !createForm.body}
+                  className="px-6 py-3 bg-gradient-to-r from-gray-800 to-gray-600 text-white rounded-xl hover:from-gray-700 hover:to-gray-500 transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {creating ? (
+                    <>
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        className="w-4 h-4 border-2 border-white border-t-transparent rounded-full"
+                      />
+                      <span>Creating...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>Create Template</span>
+                    </>
+                  )}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
