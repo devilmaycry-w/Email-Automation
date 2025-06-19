@@ -6,6 +6,7 @@ import TemplateManager from './TemplateManager';
 import EmailAnalytics from './EmailAnalytics';
 import QuickActions from './QuickActions';
 import AppTour from './AppTour';
+import TestingPurposeModal from './TestingPurposeModal';
 import GmailTestButton from './GmailTestButton';
 import { type User, updateUserManualOverride, getCurrentUser, getEmailStats, checkDailyUsageLimit } from '../lib/supabase';
 
@@ -189,6 +190,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
   return (
     <div className="space-y-8 relative min-h-screen">
       <AppTour />
+      <TestingPurposeModal />
       
       {/* Usage Limit Warning */}
       {user && (usageLimit.isNearLimit || usageLimit.isOverLimit) && (
