@@ -1,15 +1,16 @@
-import React, { useState } from 'react'; // Added useState
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Zap, RefreshCw, Settings, Download, Upload, Play, Loader2 } from 'lucide-react'; // Added Loader2
+import { Zap, RefreshCw, Settings, Download, Upload, Play, Loader2 } from 'lucide-react';
 import { type User } from '../lib/supabase';
-import { processInbox } from '../lib/emailProcessor'; // Import processInbox
+import { processInbox } from '../lib/emailProcessor';
 
 interface QuickActionsProps {
   user: User | null;
+  onStatsUpdate?: () => void;
 }
 
-const QuickActions: React.FC<QuickActionsProps> = ({ user }) => {
+const QuickActions: React.FC<QuickActionsProps> = ({ user, onStatsUpdate }) => {
   const navigate = useNavigate();
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingResult, setProcessingResult] = useState<string | null>(null);
@@ -20,8 +21,51 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user }) => {
       return;
     }
     console.log(`${actionName} action triggered`);
-    // This generic handler might not be suitable for async actions like Run Automation anymore
-    // Or it needs to be adapted. For now, specific actions will have their own handlers.
+  };
+
+  const handleRunAutomation = async () => {
+    if (!user || !user.id) {
+      console.log('[QuickActions] User not available for Run Automation');
+      setProcessingResult('User not logged in. Please log in.');
+      return;
+    }
+    
+    if (!user.gmail_connected) {
+      console.log('[QuickActions] Gmail not connected for user:', user.id);
+      setProcessingResult('Gmail is not connected. Please connect Gmail in settings.');
+      return;
+    }
+
+    console.log('[QuickActions] Run automation action triggered for user:', user.id);
+    setIsProcessing(true);
+    setProcessingResult('Processing started... This may take a moment.');
+
+    try {
+      const result = await processInbox(user.id);
+
+      console.log('[QuickActions] processInbox result:', result);
+      if (result.error) {
+        setProcessingResult(`Error: ${result.error}`);
+      } else {
+        setProcessingResult(
+          `Processing complete! ${result.processedCount} emails processed. ${
+            result.processedCount > 0 ? 'Check your analytics for details.' : 'No new emails found.'
+          }`
+        );
+        
+        // Refresh stats if callback provided
+        if (onStatsUpdate) {
+          setTimeout(() => {
+            onStatsUpdate();
+          }, 1000);
+        }
+      }
+    } catch (error: any) {
+      console.error('[QuickActions] Error calling processInbox:', error);
+      setProcessingResult(`Failed to run automation: ${error.message}`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const actions = [
@@ -60,49 +104,10 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user }) => {
     {
       title: 'Run Automation',
       description: 'Start email processing',
-      icon: isProcessing ? Loader2 : Play, // Dynamic icon
+      icon: isProcessing ? Loader2 : Play,
       color: 'from-gray-800 to-gray-500',
-      action: async () => {
-        if (!user || !user.id) {
-          console.log('[QuickActions] User not available for Run Automation');
-          setProcessingResult('User not logged in. Please log in.');
-          // navigate('/auth'); // Optional: redirect, or let user see message
-          return;
-        }
-        if (!user.gmail_connected) {
-            console.log('[QuickActions] Gmail not connected for user:', user.id);
-            setProcessingResult('Gmail is not connected. Please connect Gmail in settings.');
-            return;
-        }
-
-        console.log('[QuickActions] Run automation action triggered for user:', user.id);
-        setIsProcessing(true);
-        setProcessingResult('Processing started... This may take a moment.');
-
-        try {
-          // Assuming 'user' object might eventually have 'last_poll_timestamp'
-          // For now, it's not on the User interface from supabase.ts, so it will be undefined.
-          const lastPollTimestamp = (user as any).last_poll_timestamp || undefined;
-          console.log(`[QuickActions] Calling processInbox for user ${user.id}. Last poll timestamp: ${lastPollTimestamp}`);
-
-          const result = await processInbox(user.id, lastPollTimestamp);
-
-          console.log('[QuickActions] processInbox result:', result);
-          if (result.error) {
-            setProcessingResult(`Error: ${result.error}`);
-          } else {
-            setProcessingResult(`Processing complete. ${result.processedCount} emails processed. New poll time would be: ${result.newLastPollTimestamp}`);
-          }
-          // TODO: Implement updateUserLastPollTimestamp(user.id, result.newLastPollTimestamp) here
-          // This would require adding last_poll_timestamp to the User interface and a new Supabase function.
-        } catch (error: any) {
-          console.error('[QuickActions] Error calling processInbox:', error);
-          setProcessingResult(`Failed to run automation: ${error.message}`);
-        } finally {
-          setIsProcessing(false);
-        }
-      },
-      disabled: isProcessing, // Disable button while processing
+      action: handleRunAutomation,
+      disabled: isProcessing,
     },
     {
       title: 'Advanced Settings',
@@ -150,11 +155,18 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user }) => {
           </div>
         </div>
       </motion.div>
+      
       {processingResult && (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-4 p-3 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-700 text-center shadow"
+          className={`mt-4 p-4 rounded-lg text-sm text-center shadow-md ${
+            processingResult.includes('Error') || processingResult.includes('Failed')
+              ? 'bg-red-50 border border-red-200 text-red-700'
+              : processingResult.includes('complete')
+              ? 'bg-green-50 border border-green-200 text-green-700'
+              : 'bg-blue-50 border border-blue-200 text-blue-700'
+          }`}
         >
           {processingResult}
         </motion.div>

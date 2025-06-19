@@ -18,7 +18,7 @@ export interface User {
   id: string
   email?: string
   gmail_connected?: boolean
-  manual_override_active?: boolean // Added for manual override feature
+  manual_override_active?: boolean
   created_at?: string
   updated_at?: string
 }
@@ -61,37 +61,23 @@ export interface EmailLog {
 
 // Get Gmail tokens for a user
 export async function getGmailTokens(userId: string): Promise<GmailTokens | null> {
-  console.log('[Supabase] getGmailTokens: Attempting to fetch tokens for userID:', userId);
+  console.log('[Supabase getGmailTokens] Fetching tokens for user:', userId);
 
   const { data, error } = await supabase
     .from('user_gmail_tokens')
-    .select('*') // Consider selecting specific non-sensitive fields if tokens are too sensitive for any logs
+    .select('*')
     .eq('user_id', userId)
     .maybeSingle();
 
   if (error) {
-    console.error('[Supabase] getGmailTokens: Error fetching Gmail tokens for userID:', userId, error);
-    // Depending on RLS, an error might not be thrown for "no rows found" with maybeSingle(),
-    // but other errors (network, policy violation for select if stricter) could occur.
+    console.error('[Supabase getGmailTokens] Error:', error);
     throw new Error(`Failed to fetch Gmail tokens: ${error.message}`);
   }
 
   if (data) {
-    console.log('[Supabase] getGmailTokens: Successfully fetched Gmail tokens for userID:', userId,
-      // Log non-sensitive parts of the token data
-      {
-        id: data.id,
-        user_id: data.user_id,
-        has_access_token: !!data.access_token,
-        has_refresh_token: !!data.refresh_token,
-        expires_at: data.expires_at,
-        scope: data.scope,
-        created_at: data.created_at,
-        updated_at: data.updated_at
-      }
-    );
+    console.log('[Supabase getGmailTokens] Tokens found for user:', userId);
   } else {
-    console.log('[Supabase] getGmailTokens: No Gmail tokens found for userID:', userId);
+    console.log('[Supabase getGmailTokens] No tokens found for user:', userId);
   }
 
   return data || null;
@@ -99,93 +85,54 @@ export async function getGmailTokens(userId: string): Promise<GmailTokens | null
 
 // Get current user with Gmail connection status
 export async function getCurrentUser(): Promise<User | null> {
-  console.log('[Supabase getCurrentUser] Function called - starting execution.');
+  console.log('[Supabase getCurrentUser] Getting current user');
+  
   const { data: { user: authUser } } = await supabase.auth.getUser();
-  console.log('[Supabase getCurrentUser] supabase.auth.getUser() response:', authUser ? {id: authUser.id, email: authUser.email} : null);
-
+  
   if (!authUser) {
-    console.log('[Supabase getCurrentUser] No authUser found by supabase.auth.getUser(), returning null.');
+    console.log('[Supabase getCurrentUser] No authenticated user');
     return null;
   }
 
-  let userProfile: User | Partial<User> | null = null; // To hold the profile data from 'users' table
-  let profileErrorOccurred = false;
-
+  // Try to get user profile from users table
+  let userProfile: User | null = null;
+  
   try {
-    console.log('[Supabase getCurrentUser] Attempting to fetch profile from "users" table for user ID:', authUser.id);
-    const { data: fetchedProfileData, error: profileQueryError } = await supabase
-      .from('users') // Public 'users' table
+    const { data: profileData, error: profileError } = await supabase
+      .from('users')
       .select('*')
       .eq('id', authUser.id)
-      .maybeSingle(); // Changed from .single()
+      .maybeSingle();
 
-    if (profileQueryError) {
-      console.error('[Supabase getCurrentUser] Error fetching user profile from "users" table (maybeSingle):', profileQueryError.message);
-      profileErrorOccurred = true; // Mark that an error occurred, even if maybeSingle doesn't throw for "no rows"
-      // We will proceed with minimal user object construction using authUser data.
+    if (profileError) {
+      console.warn('[Supabase getCurrentUser] Profile fetch error:', profileError.message);
+    } else {
+      userProfile = profileData;
     }
-    userProfile = fetchedProfileData; // This will be null if no row found or if an error (like RLS) prevented row return
-
   } catch (e: any) {
-    console.error('[Supabase getCurrentUser] Exception during profile fetch from "users" table:', e.message);
-    profileErrorOccurred = true; // An unexpected exception occurred
+    console.warn('[Supabase getCurrentUser] Profile fetch exception:', e.message);
   }
 
-  // Handle case where profile is not found (new user or error)
-  if (!userProfile && !profileErrorOccurred) { // Explicitly no profile found, and no major error fetching it
-    console.warn('[Supabase getCurrentUser] User profile not found in "users" table (likely new user or trigger/RLS issue if error was silent). Constructing minimal user object.');
-    return {
-      id: authUser.id,
-      email: authUser.email,
-      created_at: authUser.created_at,
-      updated_at: authUser.updated_at,
-      gmail_connected: false, // New user won't have Gmail connected yet
-      manual_override_active: false, // Default for new user
-    } as User;
-  }
-
-  if (profileErrorOccurred && !userProfile) { // An error occurred AND we have no profile data
-     console.warn('[Supabase getCurrentUser] Due to profile fetch error and no profile data, constructing minimal user object.');
-     return {
-      id: authUser.id,
-      email: authUser.email,
-      created_at: authUser.created_at,
-      updated_at: authUser.updated_at,
-      gmail_connected: false,
-      manual_override_active: false,
-    } as User;
-  }
-
-  // If profile WAS found:
-  console.log('[Supabase getCurrentUser] Profile fetched or constructed for "users" table processing:', userProfile);
-
+  // Check Gmail connection status
   let gmail_connected = false;
   try {
-    console.log('[Supabase getCurrentUser] Attempting to fetch Gmail tokens for user ID:', authUser.id);
-    const gmailTokens = await getGmailTokens(authUser.id); // getGmailTokens already has good logging
-    if (gmailTokens) {
-      console.log('[Supabase getCurrentUser] Gmail tokens found by getGmailTokens.');
-      gmail_connected = true;
-    } else {
-      console.log('[Supabase getCurrentUser] No Gmail tokens found by getGmailTokens.');
-    }
+    const gmailTokens = await getGmailTokens(authUser.id);
+    gmail_connected = !!gmailTokens;
   } catch (tokenError: any) {
-    console.error('[Supabase getCurrentUser] Error fetching Gmail tokens:', tokenError.message);
-    // Proceed with gmail_connected as false
+    console.error('[Supabase getCurrentUser] Error checking Gmail tokens:', tokenError.message);
   }
 
-  // Construct the final User object using the fetched profile (which might be minimal if only authUser data was used due to profile error)
-  // and the determined gmail_connected status.
-  const finalUser = {
-    id: authUser.id, // Always from authUser as source of truth for ID
-    email: userProfile?.email || authUser.email, // Prefer profile email, fallback to authUser
+  // Construct final user object
+  const finalUser: User = {
+    id: authUser.id,
+    email: userProfile?.email || authUser.email,
     created_at: userProfile?.created_at || authUser.created_at,
     updated_at: userProfile?.updated_at || authUser.updated_at,
-    manual_override_active: (userProfile as User)?.manual_override_active ?? false, // Default to false if not in profile
+    manual_override_active: userProfile?.manual_override_active ?? false,
     gmail_connected: gmail_connected,
-  } as User;
+  };
 
-  console.log('[Supabase getCurrentUser] Returning final User object:', finalUser);
+  console.log('[Supabase getCurrentUser] Final user object created');
   return finalUser;
 }
 
@@ -196,15 +143,7 @@ export async function storeGmailTokens(userId: string, tokens: {
   expires_at?: string
   scope?: string
 }): Promise<void> {
-  console.log('[Supabase] storeGmailTokens: Storing tokens for userID:', userId);
-  // Avoid logging the full access/refresh tokens for security in shared logs.
-  // Log structure or specific non-sensitive parts if necessary for debugging.
-  console.log('[Supabase] storeGmailTokens: Token details (excluding sensitive values):', {
-    has_access_token: !!tokens.access_token,
-    has_refresh_token: !!tokens.refresh_token,
-    expires_at: tokens.expires_at,
-    scope: tokens.scope,
-  });
+  console.log('[Supabase storeGmailTokens] Storing tokens for user:', userId);
 
   const tokenDataToStore = {
     user_id: userId,
@@ -212,23 +151,19 @@ export async function storeGmailTokens(userId: string, tokens: {
     refresh_token: tokens.refresh_token,
     expires_at: tokens.expires_at,
     scope: tokens.scope || 'https://www.googleapis.com/auth/gmail.modify',
-    // updated_at will be set by default by Supabase (if column default is now())
-    // or could be added here: updated_at: new Date().toISOString()
   };
 
-  console.log(`[Supabase storeGmailTokens] Attempting to upsert tokens for userId: ${userId}`, tokenDataToStore);
   const { data, error } = await supabase
     .from('user_gmail_tokens')
-    .upsert(tokenDataToStore, { onConflict: 'user_id' }) // Specify conflict target
+    .upsert(tokenDataToStore, { onConflict: 'user_id' })
     .select();
 
   if (error) {
-    console.error('[Supabase storeGmailTokens] Error upserting Gmail tokens:', error);
-    // Throw a new error to ensure the caller knows the storage failed.
+    console.error('[Supabase storeGmailTokens] Error:', error);
     throw new Error(`Failed to store Gmail tokens: ${error.message}`);
-  } else {
-    console.log('[Supabase storeGmailTokens] Tokens upserted successfully. Returned data (check for RLS on SELECT):', data);
   }
+
+  console.log('[Supabase storeGmailTokens] Tokens stored successfully');
 }
 
 // Create default templates for a user
@@ -237,22 +172,22 @@ export async function createDefaultTemplates(userId: string): Promise<void> {
     {
       user_id: userId,
       category: 'order' as const,
-      subject: 'Thank you for your order',
-      body: 'Thank you for your order! We have received your request and will process it shortly. You will receive a confirmation email once your order is ready.',
+      subject: 'Thank you for your order inquiry',
+      body: 'Dear [Name],\n\nThank you for your order inquiry! We have received your request and will process it shortly. You will receive a confirmation email once your order is ready.\n\nIf you have any questions, please don\'t hesitate to contact us.\n\nBest regards,\nCustomer Service Team',
       is_active: true
     },
     {
       user_id: userId,
       category: 'support' as const,
       subject: 'We received your support request',
-      body: 'Thank you for contacting our support team. We have received your message and will get back to you within 24 hours. If this is urgent, please call our support line.',
+      body: 'Dear [Name],\n\nThank you for contacting our support team. We have received your message and will get back to you within 24 hours.\n\nTicket ID: [TicketID]\n\nIf this is urgent, please call our support line.\n\nBest regards,\nSupport Team',
       is_active: true
     },
     {
       user_id: userId,
       category: 'general' as const,
       subject: 'Thank you for your message',
-      body: 'Thank you for reaching out to us. We have received your message and will respond as soon as possible. We appreciate your interest in our services.',
+      body: 'Dear [Name],\n\nThank you for reaching out to us. We have received your message and will respond as soon as possible. We appreciate your interest in our services.\n\nBest regards,\nCustomer Service Team',
       is_active: true
     }
   ]
@@ -287,68 +222,57 @@ export async function getTemplates(userId: string): Promise<EmailTemplate[]> {
 // Utility to get a valid access token, refreshing if necessary
 export async function getValidAccessToken(
   userId: string,
-  gmailConfig: { clientId: string; clientSecret: string; redirectUri: string; } // Re-using GmailConfig type structure
+  gmailConfig: { clientId: string; clientSecret: string; redirectUri: string; }
 ): Promise<string | null> {
-  console.log('[Supabase getValidAccessToken] Called for userId:', userId);
+  console.log('[Supabase getValidAccessToken] Getting valid token for user:', userId);
 
-  const storedTokens = await getGmailTokens(userId); // getGmailTokens already has logging
-  console.log('[Supabase getValidAccessToken] Tokens retrieved by getGmailTokens:', storedTokens ? 'Found' : 'Not Found/Null');
-
+  const storedTokens = await getGmailTokens(userId);
+  
   if (!storedTokens || !storedTokens.access_token) {
-    console.warn(`[Supabase getValidAccessToken] No stored tokens or access_token field is missing for userID: ${userId}. Returning null.`);
+    console.warn('[Supabase getValidAccessToken] No stored tokens found');
     return null;
   }
 
   // Check for expiry
-  console.log('[Supabase getValidAccessToken] Checking token expiry. Expires_at:', storedTokens.expires_at, 'Current time:', new Date().toISOString());
   const bufferMilliseconds = 10 * 60 * 1000; // 10 minutes buffer
   const expiresAt = storedTokens.expires_at ? new Date(storedTokens.expires_at).getTime() : 0;
 
   if (expiresAt > Date.now() + bufferMilliseconds) {
-    console.log(`[Supabase getValidAccessToken] Token is valid (not expired) for userID: ${userId}. Returning current access_token.`);
+    console.log('[Supabase getValidAccessToken] Token is still valid');
     return storedTokens.access_token;
   }
 
-  console.log(`[Supabase getValidAccessToken] Token expired or needs proactive refresh for userID: ${userId}.`);
+  console.log('[Supabase getValidAccessToken] Token expired, attempting refresh');
 
   if (!storedTokens.refresh_token) {
-    console.error(`[Supabase getValidAccessToken] Token expired for userID: ${userId}, but NO refresh_token found. Cannot refresh. Returning null.`);
-    // Optionally, could delete the invalid tokens here: await deleteGmailTokens(userId);
+    console.error('[Supabase getValidAccessToken] No refresh token available');
     return null;
   }
 
-  console.log(`[Supabase getValidAccessToken] Attempting to refresh token for userID: ${userId} using refresh_token:`, storedTokens.refresh_token ? 'Exists' : 'MISSING!');
-  console.log('[Supabase getValidAccessToken] Gmail config being passed to refreshAccessToken:', { clientId: gmailConfig.clientId, clientSecretExists: !!gmailConfig.clientSecret, redirectUri: gmailConfig.redirectUri });
-
-  // Dynamically import refreshAccessToken to avoid circular dependencies or if structure is rigid
+  // Refresh token
   const { refreshAccessToken } = await import('../lib/gmail');
+  const newTokens = await refreshAccessToken(storedTokens.refresh_token, gmailConfig);
 
-  const newTokensFromRefresh = await refreshAccessToken(storedTokens.refresh_token, gmailConfig);
-  console.log('[Supabase getValidAccessToken] Response from refreshAccessToken:', newTokensFromRefresh ? 'Received new tokens' : 'Did NOT receive new tokens (null)');
+  if (newTokens && newTokens.access_token) {
+    console.log('[Supabase getValidAccessToken] Token refreshed successfully');
+    
+    const newExpiresAt = new Date(Date.now() + newTokens.expires_in * 1000).toISOString();
 
-
-  if (newTokensFromRefresh && newTokensFromRefresh.access_token) {
-    console.log(`[Supabase getValidAccessToken] Successfully refreshed token for userID: ${userId}. New access_token (first 10 chars):`, newTokensFromRefresh.access_token.substring(0,10));
-    const newExpiresAt = new Date(Date.now() + newTokensFromRefresh.expires_in * 1000).toISOString();
-
-    console.log('[Supabase getValidAccessToken] Storing new tokens after successful refresh...');
     try {
       await storeGmailTokens(userId, {
-        access_token: newTokensFromRefresh.access_token,
-        refresh_token: newTokensFromRefresh.refresh_token || storedTokens.refresh_token,
+        access_token: newTokens.access_token,
+        refresh_token: newTokens.refresh_token || storedTokens.refresh_token,
         expires_at: newExpiresAt,
-        scope: newTokensFromRefresh.scope || storedTokens.scope,
+        scope: newTokens.scope || storedTokens.scope,
       });
-      console.log(`[Supabase getValidAccessToken] New tokens stored for userID: ${userId}. Returning new access_token.`);
-      return newTokensFromRefresh.access_token;
+      
+      return newTokens.access_token;
     } catch (storeError) {
-      console.error(`[Supabase getValidAccessToken] CRITICAL: Failed to store new tokens after refresh for userID: ${userId}. Error:`, storeError);
-      // If storing fails, we should not return the new token as it might lead to inconsistent state.
-      // The old token is expired, new one couldn't be saved. Re-auth might be best.
+      console.error('[Supabase getValidAccessToken] Failed to store refreshed tokens:', storeError);
       return null;
     }
   } else {
-    console.error(`[Supabase getValidAccessToken] Token refresh failed for userID: ${userId}. refreshAccessToken returned null/undefined or no access_token. Returning null.`);
+    console.error('[Supabase getValidAccessToken] Token refresh failed');
     return null;
   }
 }
@@ -371,49 +295,40 @@ export async function deleteGmailTokens(userId: string): Promise<{ error: Error 
 // Log email processing details
 export async function logEmailProcessing(
   logEntry: Omit<EmailLog, 'id' | 'created_at' | 'user_id'>,
-  userId: string // This should be auth.uid() from the caller
+  userId: string
 ): Promise<EmailLog | null> {
-  // Log the userId received by the function AND the current auth.uid() if possible from this context
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-  const currentAuthUid = sessionData?.session?.user?.id;
-
-  console.log(`[Supabase logEmailProcessing] Called for (passed in) userId: ${userId}`);
-  if(sessionError) {
-    console.error('[Supabase logEmailProcessing] Error fetching session:', sessionError.message);
-  } else {
-    console.log(`[Supabase logEmailProcessing] Current session auth.uid(): ${currentAuthUid}`);
-  }
+  console.log('[Supabase logEmailProcessing] Logging email processing for user:', userId);
 
   if (!userId) {
-    console.error('[Supabase logEmailProcessing] CRITICAL: userId parameter is null or undefined. Cannot insert log.');
-    // throw new Error('userId parameter is null or undefined for logEmailProcessing'); // Or return null if preferred by caller
+    console.error('[Supabase logEmailProcessing] No userId provided');
     return null;
   }
-  if (currentAuthUid && userId !== currentAuthUid) {
-    console.warn(`[Supabase logEmailProcessing] WARNING: Passed userId (${userId}) does not match current session auth.uid() (${currentAuthUid}). This might cause RLS issues if RLS is based on auth.uid().`);
-  }
 
-  const logDataToInsert = { ...logEntry, user_id: userId };
-  console.log('[Supabase logEmailProcessing] Attempting to insert log data:', logDataToInsert);
+  const logDataToInsert = { 
+    ...logEntry, 
+    user_id: userId,
+    // Ensure confidence_score is a valid number
+    confidence_score: Math.max(0, Math.min(1, logEntry.confidence_score || 0))
+  };
 
-  const { data, error } = await supabase
-    .from('email_logs')
-    .insert([logDataToInsert]) // Ensure it's an array of objects
-    .select()
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('email_logs')
+      .insert([logDataToInsert])
+      .select()
+      .single();
 
-  if (error) {
-    console.error('[Supabase logEmailProcessing] Error inserting email log:', error.message, error); // Log full error object
-    // Consider the specific error message: "new row violates row-level security policy"
-    if (error.message.includes('violates row-level security policy') || error.message.includes('RLS')) {
-        console.error(`[Supabase logEmailProcessing] RLS VIOLATION LIKELY: This means the policy check failed.
-        Auth UID from session: ${currentAuthUid}, user_id in attempted insert: ${userId}`);
+    if (error) {
+      console.error('[Supabase logEmailProcessing] Error inserting log:', error);
+      throw new Error(`Failed to log email processing: ${error.message}`);
     }
-    throw new Error(`Failed to log email processing: ${error.message}`);
-  }
 
-  console.log('[Supabase logEmailProcessing] Email log inserted successfully. Returned data:', data);
-  return data;
+    console.log('[Supabase logEmailProcessing] Email log inserted successfully');
+    return data;
+  } catch (error: any) {
+    console.error('[Supabase logEmailProcessing] Exception during insert:', error);
+    throw error;
+  }
 }
 
 // Update user's manual override status
@@ -463,4 +378,49 @@ export async function getEmailLogs(userId: string, limit = 50): Promise<EmailLog
   }
 
   return data || []
+}
+
+// Get email statistics for dashboard
+export async function getEmailStats(userId: string): Promise<{
+  totalProcessed: number;
+  totalSent: number;
+  todayProcessed: number;
+  todaySent: number;
+  categoryBreakdown: Record<string, number>;
+}> {
+  const { data, error } = await supabase
+    .from('email_logs')
+    .select('*')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error fetching email stats:', error);
+    return {
+      totalProcessed: 0,
+      totalSent: 0,
+      todayProcessed: 0,
+      todaySent: 0,
+      categoryBreakdown: {}
+    };
+  }
+
+  const logs = data || [];
+  const today = new Date().toISOString().split('T')[0];
+  
+  const todayLogs = logs.filter(log => 
+    log.processed_at.startsWith(today)
+  );
+
+  const categoryBreakdown = logs.reduce((acc, log) => {
+    acc[log.category] = (acc[log.category] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  return {
+    totalProcessed: logs.length,
+    totalSent: logs.filter(log => log.response_sent).length,
+    todayProcessed: todayLogs.length,
+    todaySent: todayLogs.filter(log => log.response_sent).length,
+    categoryBreakdown
+  };
 }

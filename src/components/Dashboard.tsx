@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Brain, Settings, BarChart3, Clock, CheckCircle, Power, Loader2 } from 'lucide-react';
+import { Mail, Brain, Settings, BarChart3, Clock, CheckCircle, Power, Loader2, TrendingUp, Users } from 'lucide-react';
 import TemplateManager from './TemplateManager';
 import EmailAnalytics from './EmailAnalytics';
 import QuickActions from './QuickActions';
 import AppTour from './AppTour';
-import GmailTestButton from './GmailTestButton'; // Import the GmailTestButton
-import { type User, updateUserManualOverride, getCurrentUser } from '../lib/supabase';
+import GmailTestButton from './GmailTestButton';
+import { type User, updateUserManualOverride, getCurrentUser, getEmailStats } from '../lib/supabase';
 
 interface DashboardProps {
   user: User | null;
+}
+
+interface EmailStats {
+  totalProcessed: number;
+  totalSent: number;
+  todayProcessed: number;
+  todaySent: number;
+  categoryBreakdown: Record<string, number>;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
@@ -19,6 +27,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
   const [user, setUser] = useState<User | null>(initialUser);
   const [manualOverride, setManualOverride] = useState(false);
   const [loadingOverrideStatus, setLoadingOverrideStatus] = useState(true);
+  const [emailStats, setEmailStats] = useState<EmailStats>({
+    totalProcessed: 0,
+    totalSent: 0,
+    todayProcessed: 0,
+    todaySent: 0,
+    categoryBreakdown: {}
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -27,25 +43,23 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
     if (initialUser && initialUser.id) {
       console.log('[Dashboard.tsx] useEffect: initialUser exists, fetching fresh user data.');
       setLoadingOverrideStatus(true);
-      // Fetch the latest user data to get manual_override_active
-      // This is important if the initialUser prop might not be fully up-to-date
-      // or to ensure we have the field if it was just added.
+      setLoadingStats(true);
+      
       const fetchUserData = async () => {
         try {
           console.log('[Dashboard.tsx] useEffect: Before getCurrentUser().');
-          const freshUser = await getCurrentUser(); // getCurrentUser now fetches the 'users' table
+          const freshUser = await getCurrentUser();
           console.log('[Dashboard.tsx] useEffect: After getCurrentUser(). freshUser:', freshUser);
           if (freshUser) {
-            setUser(freshUser); // Update the user state with the fresh data
+            setUser(freshUser);
             setManualOverride(freshUser.manual_override_active ?? false);
           }
         } catch (error) {
           console.error("[Dashboard.tsx] useEffect: Error fetching user data for override status:", error);
-          // Keep initialUser's override status if fetch fails, or default
           if (initialUser?.manual_override_active !== undefined) {
             setManualOverride(initialUser.manual_override_active);
           } else {
-            setManualOverride(false); // Default if not available
+            setManualOverride(false);
           }
         } finally {
           console.log('[Dashboard.tsx] useEffect: Before setLoadingOverrideStatus(false) in finally block.');
@@ -53,35 +67,86 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
           console.log('[Dashboard.tsx] useEffect: After setLoadingOverrideStatus(false) in finally block.');
         }
       };
+
+      const fetchEmailStats = async () => {
+        try {
+          const stats = await getEmailStats(initialUser.id);
+          setEmailStats(stats);
+        } catch (error) {
+          console.error('[Dashboard.tsx] Error fetching email stats:', error);
+        } finally {
+          setLoadingStats(false);
+        }
+      };
+
       fetchUserData();
+      fetchEmailStats();
     } else {
       console.log('[Dashboard.tsx] useEffect: No initialUser or initialUser.id, skipping fetch.');
       setLoadingOverrideStatus(false);
-      setManualOverride(false); // Default if no user
+      setLoadingStats(false);
+      setManualOverride(false);
     }
   }, [initialUser]);
 
   const handleToggleManualOverride = async () => {
     if (!user) return;
     const newStatus = !manualOverride;
-    setManualOverride(newStatus); // Optimistic update
+    setManualOverride(newStatus);
     try {
       const updatedUser = await updateUserManualOverride(user.id, newStatus);
       if (updatedUser) {
-        setUser(updatedUser); // Update user state with potentially new updated_at, etc.
+        setUser(updatedUser);
         setManualOverride(updatedUser.manual_override_active ?? false);
       }
     } catch (error) {
       console.error('Failed to update manual override status:', error);
-      setManualOverride(!newStatus); // Revert on error
+      setManualOverride(!newStatus);
+    }
+  };
+
+  const refreshStats = async () => {
+    if (!user?.id) return;
+    try {
+      setLoadingStats(true);
+      const stats = await getEmailStats(user.id);
+      setEmailStats(stats);
+    } catch (error) {
+      console.error('Error refreshing stats:', error);
+    } finally {
+      setLoadingStats(false);
     }
   };
 
   const stats = [
-    { label: 'Emails Processed', value: '1,247', icon: Mail, color: 'from-gray-800 to-gray-600', change: '+12%' },
-    { label: 'AI Classifications', value: '98.5%', icon: Brain, color: 'from-gray-700 to-gray-500', change: '+2.1%' },
-    { label: 'Response Rate', value: '94.2%', icon: CheckCircle, color: 'from-gray-600 to-gray-400', change: '+5.3%' },
-    { label: 'Avg Response Time', value: '2.3s', icon: Clock, color: 'from-gray-500 to-gray-700', change: '-0.7s' },
+    { 
+      label: 'Total Processed', 
+      value: loadingStats ? '...' : emailStats.totalProcessed.toString(), 
+      icon: Mail, 
+      color: 'from-gray-800 to-gray-600', 
+      change: loadingStats ? '' : `+${emailStats.todayProcessed} today` 
+    },
+    { 
+      label: 'Responses Sent', 
+      value: loadingStats ? '...' : emailStats.totalSent.toString(), 
+      icon: CheckCircle, 
+      color: 'from-gray-700 to-gray-500', 
+      change: loadingStats ? '' : `+${emailStats.todaySent} today` 
+    },
+    { 
+      label: 'Success Rate', 
+      value: loadingStats ? '...' : emailStats.totalProcessed > 0 ? `${Math.round((emailStats.totalSent / emailStats.totalProcessed) * 100)}%` : '0%', 
+      icon: TrendingUp, 
+      color: 'from-gray-600 to-gray-400', 
+      change: loadingStats ? '' : 'Automated responses' 
+    },
+    { 
+      label: 'Categories', 
+      value: loadingStats ? '...' : Object.keys(emailStats.categoryBreakdown).length.toString(), 
+      icon: Brain, 
+      color: 'from-gray-500 to-gray-700', 
+      change: loadingStats ? '' : 'AI Classifications' 
+    },
   ];
 
   const tabs = [
@@ -98,8 +163,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
   };
 
   return (
-    <div className="space-y-8 relative"> {/* Added relative for potential positioning contexts */}
-      <AppTour /> {/* Add the AppTour component here */}
+    <div className="space-y-8 relative">
+      <AppTour />
+      
       {/* Welcome Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -129,11 +195,20 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="mt-2 mb-6" // Adjusted margin for spacing
+            className="mt-2 mb-6 flex items-center justify-center space-x-4"
           >
-            <p className="text-sm text-center text-gray-500 bg-gray-100/80 rounded-full py-2 px-4 inline-block border border-gray-200 shadow-sm">
+            <p className="text-sm text-center text-gray-500 bg-gray-100/80 rounded-full py-2 px-4 border border-gray-200 shadow-sm">
               Free plan: ~100-150 emails/day per user
             </p>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={refreshStats}
+              disabled={loadingStats}
+              className="text-sm bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-full transition-colors disabled:opacity-50"
+            >
+              {loadingStats ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh Stats'}
+            </motion.button>
           </motion.div>
         )}
         
@@ -162,7 +237,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
       </motion.div>
 
       {/* Stats Grid */}
-      {/* Stats Grid */}
       <motion.div 
         className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
         initial={{ opacity: 0, y: 40 }}
@@ -186,7 +260,11 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
                 >
                   <stat.icon className="w-6 h-6 text-white" />
                 </motion.div>
-                <span className="text-sm text-green-600 font-semibold bg-green-100 px-2 py-1 rounded-full border border-green-200">{stat.change}</span>
+                {stat.change && (
+                  <span className="text-sm text-green-600 font-semibold bg-green-100 px-2 py-1 rounded-full border border-green-200">
+                    {stat.change}
+                  </span>
+                )}
               </div>
               <div>
                 <p className="text-3xl font-bold text-gray-900 mb-1">{stat.value}</p>
@@ -203,7 +281,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
       </motion.div>
 
       {/* Quick Actions */}
-      <QuickActions user={user} />
+      <QuickActions user={user} onStatsUpdate={refreshStats} />
 
       {/* Manual Override Toggle Section & Test Button */}
       {user && (
@@ -212,51 +290,50 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="bg-white/90 backdrop-blur-xl rounded-3xl border border-gray-200/50 shadow-xl p-8 h-full" // Added h-full for alignment
+            className="bg-white/90 backdrop-blur-xl rounded-3xl border border-gray-200/50 shadow-xl p-8 h-full"
           >
             <div className="flex items-center justify-between">
               <div>
                 <h4 className="text-xl font-semibold text-gray-900">Manual Override</h4>
                 <p className="text-gray-600 mt-1">
-                    {manualOverride
-                      ? 'Automated responses are currently DISABLED.'
-                      : 'Automated responses are currently ENABLED.'}
-                  </p>
-                </div>
-                {loadingOverrideStatus ? (
-                  <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
-                ) : (
-                  <motion.div
-                    whileTap={{ scale: 0.95 }}
-                    className={`relative inline-flex items-center h-6 rounded-full w-11 cursor-pointer transition-colors duration-300 ${
-                      manualOverride ? 'bg-red-500' : 'bg-green-500'
-                  }`}
-                    onClick={handleToggleManualOverride}
-                  >
-                    <span className="sr-only">Toggle Manual Override</span>
-                    <motion.span
-                      layout
-                      transition={{ type: "spring", stiffness: 700, damping: 30 }}
-                      className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-300 ${
-                        manualOverride ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </motion.div>
-                )}
+                  {manualOverride
+                    ? 'Automated responses are currently DISABLED.'
+                    : 'Automated responses are currently ENABLED.'}
+                </p>
               </div>
-              <p className="text-sm text-gray-500 mt-3">
-                When enabled, you can manually review and send emails. When disabled, the system will send automated responses based on your templates.
-              </p>
-            </motion.div>
+              {loadingOverrideStatus ? (
+                <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
+              ) : (
+                <motion.div
+                  whileTap={{ scale: 0.95 }}
+                  className={`relative inline-flex items-center h-6 rounded-full w-11 cursor-pointer transition-colors duration-300 ${
+                    manualOverride ? 'bg-red-500' : 'bg-green-500'
+                  }`}
+                  onClick={handleToggleManualOverride}
+                >
+                  <span className="sr-only">Toggle Manual Override</span>
+                  <motion.span
+                    layout
+                    transition={{ type: "spring", stiffness: 700, damping: 30 }}
+                    className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-300 ${
+                      manualOverride ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </motion.div>
+              )}
+            </div>
+            <p className="text-sm text-gray-500 mt-3">
+              When enabled, you can manually review and send emails. When disabled, the system will send automated responses based on your templates.
+            </p>
+          </motion.div>
 
-            {/* Gmail Test Button integrated here */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.35 }} // Slightly later delay
-            >
-              <GmailTestButton user={user} className="h-full" /> {/* Added h-full for alignment if needed */}
-            </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.35 }}
+          >
+            <GmailTestButton user={user} className="h-full" />
+          </motion.div>
         </div>
       )}
 
@@ -303,29 +380,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
                 >
                   <h4 className="font-semibold text-gray-900 mb-6 text-xl">AI Classification Status</h4>
                   <div className="space-y-4">
-                    <motion.div
-                      whileHover={{ x: 5 }}
-                      className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
-                    >
-                      <span className="text-gray-800 font-medium">Order Inquiries</span>
-                      <span className="font-bold text-gray-700 text-lg">342</span>
-                    </motion.div>
-                    <motion.div
-                      whileHover={{ x: 5 }}
-                      className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
-                    >
-                      <span className="text-gray-800 font-medium">Support Requests</span>
-                      <span className="font-bold text-gray-600 text-lg">189</span>
-                    </motion.div>
-                    <motion.div
-                      whileHover={{ x: 5 }}
-                      className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
-                    >
-                      <span className="text-gray-800 font-medium">General Emails</span>
-                      <span className="font-bold text-gray-500 text-lg">716</span>
-                    </motion.div>
+                    {Object.entries(emailStats.categoryBreakdown).map(([category, count]) => (
+                      <motion.div
+                        key={category}
+                        whileHover={{ x: 5 }}
+                        className="flex justify-between items-center p-3 bg-white/80 rounded-xl border border-gray-200"
+                      >
+                        <span className="text-gray-800 font-medium capitalize">{category} Emails</span>
+                        <span className="font-bold text-gray-700 text-lg">{count}</span>
+                      </motion.div>
+                    ))}
+                    {Object.keys(emailStats.categoryBreakdown).length === 0 && (
+                      <div className="text-center py-4 text-gray-500">
+                        No emails processed yet
+                      </div>
+                    )}
                   </div>
                 </motion.div>
+                
                 <motion.div 
                   whileHover={{ scale: 1.02 }}
                   transition={{ duration: 0.2 }}
@@ -342,7 +414,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
                         transition={{ duration: 2, repeat: Infinity }}
                         className="w-3 h-3 bg-green-500 rounded-full shadow-sm"
                       />
-                      <span className="text-gray-800">Order inquiry auto-responded</span>
+                      <span className="text-gray-800">
+                        {emailStats.todayProcessed} emails processed today
+                      </span>
                     </motion.div>
                     <motion.div
                       whileHover={{ x: 5 }}
@@ -353,7 +427,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
                         transition={{ duration: 2, repeat: Infinity, delay: 0.5 }}
                         className="w-3 h-3 bg-blue-500 rounded-full shadow-sm"
                       />
-                      <span className="text-gray-800">Support ticket classified</span>
+                      <span className="text-gray-800">
+                        {emailStats.todaySent} responses sent today
+                      </span>
                     </motion.div>
                     <motion.div
                       whileHover={{ x: 5 }}
@@ -364,7 +440,9 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
                         transition={{ duration: 2, repeat: Infinity, delay: 1 }}
                         className="w-3 h-3 bg-purple-500 rounded-full shadow-sm"
                       />
-                      <span className="text-gray-800">Template updated</span>
+                      <span className="text-gray-800">
+                        System running smoothly
+                      </span>
                     </motion.div>
                   </div>
                 </motion.div>
