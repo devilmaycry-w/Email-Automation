@@ -9,8 +9,8 @@ import {
 import {
   getTemplates,
   logEmailProcessing,
+  updateUserManualOverride, // Added for checking manual override status
   getCurrentUser,           // Added for checking manual override status
-  updateUserLastPollTimestamp, // Added for updating last poll timestamp
   type EmailTemplate,
   type User,
   type EmailLog
@@ -32,55 +32,64 @@ const extractNameFromEmail = (emailSender: string): string => {
 
 export const processInbox = async (
   userId: string,
-  accessToken: string,
-  lastPollTimestamp?: string // Accept lastPollTimestamp as parameter
-): Promise<{ processedCount: number; newLastPollTimestamp: string }> => {
+  // accessToken: string, // No longer passed directly
+  lastPollTimestamp?: string // Making this optional as pollNewEmails handles undefined
+): Promise<{ processedCount: number; newLastPollTimestamp: string; error?: string }> => {
   let processedCount = 0;
   const currentPollTime = new Date().toISOString();
 
-  try {
-    console.log(`[EmailProcessor] Starting inbox processing for user ${userId}`);
-    console.log(`[EmailProcessor] Last poll timestamp: ${lastPollTimestamp || 'none'}`);
+  console.log(`[EmailProcessor] Starting inbox processing for user ${userId} since ${lastPollTimestamp || 'the beginning'}.`);
 
+  try {
     // 0. Check manual override status first
-    const user = await getCurrentUser(); // Assuming this fetches the user including manual_override_active
+    const user = await getCurrentUser();
     if (user?.manual_override_active) {
       console.log(`[EmailProcessor] User ${userId} has manual override enabled. Skipping automated processing.`);
       return { processedCount: 0, newLastPollTimestamp: lastPollTimestamp || currentPollTime };
     }
 
+    // Obtain a valid access token
+    console.log(`[EmailProcessor] Attempting to get valid access token for user ${userId}.`);
+    const gmailConfig = {
+      clientId: import.meta.env.VITE_GMAIL_CLIENT_ID!,
+      clientSecret: import.meta.env.VITE_GMAIL_CLIENT_SECRET!, // Needed for refreshAccessToken
+      redirectUri: import.meta.env.VITE_GMAIL_REDIRECT_URI!   // Also potentially needed by refresh logic if ever involved
+    };
+    // Need to import getValidAccessToken from supabase.ts
+    const { getValidAccessToken } = await import('./supabase'); // Assuming path from emailProcessor.ts to supabase.ts
+    const validAccessToken = await getValidAccessToken(userId, gmailConfig);
+
+    if (!validAccessToken) {
+      const errorMessage = `[EmailProcessor] Could not obtain valid Gmail access token for user ${userId}. Skipping email processing. Re-authentication may be required.`;
+      console.error(errorMessage);
+      // TODO: Consider setting a flag on the user's profile in DB to indicate re-auth needed.
+      return { processedCount: 0, newLastPollTimestamp: lastPollTimestamp || currentPollTime, error: 'Failed to get valid token' };
+    }
+    console.log(`[EmailProcessor] Successfully obtained valid access token for user ${userId}.`);
+
     // 1. Poll for new emails
-    console.log(`[EmailProcessor] Polling for new emails...`);
-    const messages = await pollNewEmails(accessToken, lastPollTimestamp);
+    const messages = await pollNewEmails(validAccessToken, lastPollTimestamp);
 
     if (!messages || messages.length === 0) {
-      console.log(`[EmailProcessor] No new messages for user ${userId} since ${lastPollTimestamp || 'the beginning'}.`);
-      // Update timestamp even if no messages to avoid re-checking the same period
-      await updateUserLastPollTimestamp(userId, currentPollTime);
+      console.log(`No new messages for user ${userId} since ${lastPollTimestamp || 'the beginning'}.`);
       return { processedCount: 0, newLastPollTimestamp: currentPollTime };
     }
 
-    console.log(`[EmailProcessor] Fetched ${messages.length} new messages for user ${userId}.`);
+    console.log(`Fetched ${messages.length} new messages for user ${userId}.`);
 
     // 2. Get active templates for the user
     const allTemplates = await getTemplates(userId);
     const activeTemplates = allTemplates.filter(t => t.is_active);
 
     if (activeTemplates.length === 0) {
-      console.warn(`[EmailProcessor] No active templates found for user ${userId}. Cannot process emails.`);
-      // Update timestamp even if no templates to avoid re-checking
-      await updateUserLastPollTimestamp(userId, currentPollTime);
+      console.warn(`No active templates found for user ${userId}. Cannot process emails.`);
       return { processedCount: 0, newLastPollTimestamp: currentPollTime };
     }
 
-    console.log(`[EmailProcessor] Found ${activeTemplates.length} active templates`);
-
     for (const message of messages) {
       try {
-        console.log(`[EmailProcessor] Processing message ID: ${message.id}`);
-
         // 3. Get email details
-        const emailDetails = await getEmailDetails(accessToken, message.id);
+        const emailDetails = await getEmailDetails(validAccessToken, message.id);
         if (!emailDetails || !emailDetails.payload) {
           console.warn(`[EmailProcessor] Could not retrieve details for message ID: ${message.id}`);
           continue;
@@ -94,8 +103,6 @@ export const processInbox = async (
         const subject = subjectHeader ? subjectHeader.value : 'No Subject';
         const senderEmail = fromHeader ? fromHeader.value : 'Unknown Sender';
         const gmailMessageId = messageIdHeader ? messageIdHeader.value : message.id; // Use API message ID if header is missing
-
-        console.log(`[EmailProcessor] Email details - Subject: "${subject}", From: "${senderEmail}"`);
 
         // Extract body (simplistic, might need improvement for multipart emails)
         let body = '';
@@ -119,7 +126,7 @@ export const processInbox = async (
         }
 
         if (!body) {
-            console.log(`[EmailProcessor] Email ${message.id} has no parsable body content. Skipping.`);
+            console.log(`Email ${message.id} has no parsable body content. Skipping.`);
             // Optionally log this skipped email with minimal info
             await logEmailProcessing({
               gmail_message_id: gmailMessageId,
@@ -135,11 +142,9 @@ export const processInbox = async (
             continue;
         }
 
-        console.log(`[EmailProcessor] Email body extracted (${body.length} characters)`);
 
         // 4. Classify email
         const classification: EmailClassification = await classifyEmail(subject, body);
-        console.log(`[EmailProcessor] Email classified as: ${classification.category} (confidence: ${classification.confidence})`);
 
         // 5. Select template
         const template = activeTemplates.find(t => t.category === classification.category);
@@ -149,8 +154,6 @@ export const processInbox = async (
 
         if (template) {
           templateIdUsed = template.id;
-          console.log(`[EmailProcessor] Found template for category: ${classification.category}`);
-          
           // 6. Personalize template
           const extractedName = extractNameFromEmail(senderEmail);
           const variables: Record<string, string> = {
@@ -163,25 +166,23 @@ export const processInbox = async (
           const personalizedSubject = gmailPersonalizeTemplate(template.subject, variables);
           const personalizedBody = gmailPersonalizeTemplate(template.body, variables);
 
-          console.log(`[EmailProcessor] Template personalized for ${extractedName}`);
-
           // 7. Send reply
           try {
             await sendEmailResponse(
-              accessToken,
+              validAccessToken,
               senderEmail, // Send back to the original sender
               personalizedSubject,
               personalizedBody,
               message.threadId // Reply in the same thread
             );
             responseSent = true;
-            console.log(`[EmailProcessor] Successfully replied to email: ${subject} from ${senderEmail}`);
+            console.log(`Replied to email: ${subject} from ${senderEmail}`);
           } catch (sendError) {
-            console.error(`[EmailProcessor] Error sending reply for message ID ${message.id}:`, sendError);
+            console.error(`Error sending reply for message ID ${message.id}:`, sendError);
             // Log this error if needed, responseSent remains false
           }
         } else {
-          console.log(`[EmailProcessor] No active template found for category: ${classification.category} for email: ${subject}`);
+          console.log(`No active template found for category: ${classification.category} for email: ${subject}`);
         }
 
         // 8. Log processing
@@ -198,37 +199,26 @@ export const processInbox = async (
         await logEmailProcessing(logEntry, userId);
 
         processedCount++;
-        console.log(`[EmailProcessor] Successfully processed email ${processedCount}/${messages.length}`);
 
       } catch (error) {
-        console.error(`[EmailProcessor] Error processing message ID ${message.id}:`, error);
+        console.error(`Error processing message ID ${message.id}:`, error);
         // Optionally log error to a specific error log or the main log with an error field
-        try {
-          await logEmailProcessing({
-              gmail_message_id: message.id,
-              sender_email: 'Unknown (error before parsing)',
-              subject: 'Unknown (error before parsing)',
-              category: 'general',
-              confidence_score: 0,
-              response_sent: false,
-              processed_at: new Date().toISOString(),
-              // error_message: error.message // Example
-          }, userId);
-        } catch (logError) {
-          console.error(`[EmailProcessor] Failed to log error for message ${message.id}:`, logError);
-        }
+        await logEmailProcessing({
+            gmail_message_id: message.id,
+            sender_email: 'Unknown (error before parsing)',
+            subject: 'Unknown (error before parsing)',
+            category: 'general',
+            confidence_score: 0,
+            response_sent: false,
+            processed_at: new Date().toISOString(),
+            // error_message: error.message // Example
+        }, userId);
       }
     }
-
-    // 9. Update the user's last poll timestamp
-    console.log(`[EmailProcessor] Updating last poll timestamp to: ${currentPollTime}`);
-    await updateUserLastPollTimestamp(userId, currentPollTime);
-
-    console.log(`[EmailProcessor] Processing complete. Processed ${processedCount} emails.`);
     return { processedCount, newLastPollTimestamp: currentPollTime };
 
   } catch (error) {
-    console.error(`[EmailProcessor] Failed to process inbox for user ${userId}:`, error);
+    console.error(`Failed to process inbox for user ${userId}:`, error);
     return { processedCount: 0, newLastPollTimestamp: lastPollTimestamp || currentPollTime }; // Return old timestamp on major failure
   }
 };

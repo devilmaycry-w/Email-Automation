@@ -57,7 +57,7 @@ function App() {
 
             const pendingCode = sessionStorage.getItem('gmail_auth_code');
             if (pendingCode) {
-              console.log('[App.tsx] SIGNED_IN: Pending Gmail auth code found:', pendingCode);
+              console.log('[App.tsx] SIGNED_IN: Processing pending Gmail auth code:', pendingCode);
               sessionStorage.removeItem('gmail_auth_code');
               try {
                 const config = {
@@ -65,35 +65,50 @@ function App() {
                   clientSecret: import.meta.env.VITE_GMAIL_CLIENT_SECRET!,
                   redirectUri: import.meta.env.VITE_GMAIL_REDIRECT_URI!
                 };
+                console.log('[App.tsx] SIGNED_IN: Config for exchangeCodeForToken:', { clientId: config.clientId, redirectUri: config.redirectUri, clientSecretExists: !!config.clientSecret });
+
                 const tokens = await exchangeCodeForToken(pendingCode, config);
+                console.log('[App.tsx] SIGNED_IN: Tokens received from exchangeCodeForToken:', tokens);
+
                 if (tokens) {
                   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-                  await storeGmailTokens(session.user.id, {
-                    access_token: tokens.access_token,
-                    refresh_token: tokens.refresh_token,
-                    expires_at: expiresAt,
-                    scope: tokens.scope
-                  });
+                  try {
+                    console.log('[App.tsx] SIGNED_IN: Attempting to store tokens via storeGmailTokens...');
+                    await storeGmailTokens(session.user.id, {
+                      access_token: tokens.access_token,
+                      refresh_token: tokens.refresh_token, // Ensure this is tokens.refresh_token
+                      expires_at: expiresAt,
+                      scope: tokens.scope
+                    });
+                    console.log('[App.tsx] SIGNED_IN: Tokens stored successfully.');
 
-                  console.log('[App.tsx] SIGNED_IN: Before getCurrentUser() after Gmail token storage.');
-                  const updatedUserWithGmail = await getCurrentUser(); // Re-fetch user to get updated gmail_connected status
-                  console.log('[App.tsx] SIGNED_IN: After getCurrentUser() after Gmail token storage. updatedUser:', updatedUserWithGmail);
+                    // Update user state to reflect gmail_connected: true
+                    console.log('[App.tsx] SIGNED_IN: Before getCurrentUser() after successful token storage.');
+                    const updatedUser = await getCurrentUser(); // This will now also fetch the tokens status
+                    console.log('[App.tsx] SIGNED_IN: After getCurrentUser() after successful token storage. updatedUser:', updatedUser);
+                    setUser(updatedUser); // This will set the user, including gmail_connected status
+                    alert('Gmail connected successfully!');
 
-                  if (updatedUserWithGmail) {
-                    console.log('[App.tsx] SIGNED_IN: Before setUser() after Gmail token storage.');
-                    setUser(updatedUserWithGmail);
-                    console.log('[App.tsx] SIGNED_IN: After setUser() after Gmail token storage.');
-                  } else {
-                     console.error('[App.tsx] SIGNED_IN: Failed to get updated user after Gmail token storage. User might be partially set.');
-                     // setUser(currentUser); // Fallback to user without updated Gmail status if re-fetch fails
+                  } catch (storageError) {
+                    console.error('[App.tsx] SIGNED_IN: CRITICAL: Failed to store Gmail tokens:', storageError);
+                    alert('Gmail connected, but there was an issue saving your connection details. Please try reconnecting or contact support.');
+                    // If storage fails, we should ensure the user state reflects gmail_connected: false.
+                    // Fetching the user again would achieve this if tokens aren't actually stored.
+                    // Or, if we have the currentUser object from before, update it.
+                    console.log('[App.tsx] SIGNED_IN: Before getCurrentUser() after token storage failure.');
+                    const userAfterStorageFailure = await getCurrentUser();
+                    console.log('[App.tsx] SIGNED_IN: After getCurrentUser() after token storage failure. userAfterStorageFailure:', userAfterStorageFailure);
+                    setUser(userAfterStorageFailure); // This will reflect gmail_connected: false if tokens weren't stored
                   }
-                  alert('Gmail connected successfully!');
+                } else {
+                  console.log('[App.tsx] SIGNED_IN: No tokens received from exchangeCodeForToken, skipping storage.');
                 }
-                console.log('[App.tsx] SIGNED_IN: After processing pending Gmail auth code.');
-              } catch (gmailError) {
-                console.error('[App.tsx] SIGNED_IN: Error processing pending Gmail auth:', gmailError);
-                console.log('[App.tsx] SIGNED_IN: After processing pending Gmail auth code (error).');
+                console.log('[App.tsx] SIGNED_IN: Finished processing pending Gmail auth code section.');
+              } catch (exchangeError) { // Catch errors from exchangeCodeForToken or other issues before storage attempt
+                console.error('[App.tsx] SIGNED_IN: Error during Gmail auth code processing (exchange or pre-storage):', exchangeError);
                 // Non-fatal for login, user might need to retry Gmail connect.
+                // Ensure user state is updated if it was optimistically set or if getCurrentUser needs to be called again.
+                // For now, just logging, as the main try-catch for SIGNED_IN will handle critical failures.
               }
             }
 

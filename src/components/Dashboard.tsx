@@ -5,7 +5,8 @@ import { Mail, Brain, Settings, BarChart3, Clock, CheckCircle, Power, Loader2 } 
 import TemplateManager from './TemplateManager';
 import EmailAnalytics from './EmailAnalytics';
 import QuickActions from './QuickActions';
-import AppTour from './AppTour'; // Import the AppTour component
+import AppTour from './AppTour';
+import GmailTestButton from './GmailTestButton'; // Import the GmailTestButton
 import { type User, updateUserManualOverride, getCurrentUser } from '../lib/supabase';
 
 interface DashboardProps {
@@ -74,11 +75,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
       console.error('Failed to update manual override status:', error);
       setManualOverride(!newStatus); // Revert on error
     }
-  };
-
-  // Handle user updates from QuickActions
-  const handleUserUpdate = (updatedUser: User) => {
-    setUser(updatedUser);
   };
 
   const stats = [
@@ -207,50 +203,61 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
       </motion.div>
 
       {/* Quick Actions */}
-      <QuickActions user={user} onUserUpdate={handleUserUpdate} />
+      <QuickActions user={user} />
 
-      {/* Manual Override Toggle Section */}
+      {/* Manual Override Toggle Section & Test Button */}
       {user && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.3 }}
-          className="bg-white/90 backdrop-blur-xl rounded-3xl border border-gray-200/50 shadow-xl p-8"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-xl font-semibold text-gray-900">Manual Override</h4>
-              <p className="text-gray-600 mt-1">
-                {manualOverride
-                  ? 'Automated responses are currently DISABLED.'
-                  : 'Automated responses are currently ENABLED.'}
-              </p>
-            </div>
-            {loadingOverrideStatus ? (
-              <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
-            ) : (
-              <motion.div
-                whileTap={{ scale: 0.95 }}
-                className={`relative inline-flex items-center h-6 rounded-full w-11 cursor-pointer transition-colors duration-300 ${
-                  manualOverride ? 'bg-red-500' : 'bg-green-500'
-                }`}
-                onClick={handleToggleManualOverride}
-              >
-                <span className="sr-only">Toggle Manual Override</span>
-                <motion.span
-                  layout
-                  transition={{ type: "spring", stiffness: 700, damping: 30 }}
-                  className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-300 ${
-                    manualOverride ? 'translate-x-6' : 'translate-x-1'
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="bg-white/90 backdrop-blur-xl rounded-3xl border border-gray-200/50 shadow-xl p-8 h-full" // Added h-full for alignment
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xl font-semibold text-gray-900">Manual Override</h4>
+                <p className="text-gray-600 mt-1">
+                    {manualOverride
+                      ? 'Automated responses are currently DISABLED.'
+                      : 'Automated responses are currently ENABLED.'}
+                  </p>
+                </div>
+                {loadingOverrideStatus ? (
+                  <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
+                ) : (
+                  <motion.div
+                    whileTap={{ scale: 0.95 }}
+                    className={`relative inline-flex items-center h-6 rounded-full w-11 cursor-pointer transition-colors duration-300 ${
+                      manualOverride ? 'bg-red-500' : 'bg-green-500'
                   }`}
-                />
-              </motion.div>
-            )}
-          </div>
-          <p className="text-sm text-gray-500 mt-3">
-            When enabled, you can manually review and send emails. When disabled, the system will send automated responses based on your templates.
-          </p>
-        </motion.div>
+                    onClick={handleToggleManualOverride}
+                  >
+                    <span className="sr-only">Toggle Manual Override</span>
+                    <motion.span
+                      layout
+                      transition={{ type: "spring", stiffness: 700, damping: 30 }}
+                      className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-300 ${
+                        manualOverride ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </motion.div>
+                )}
+              </div>
+              <p className="text-sm text-gray-500 mt-3">
+                When enabled, you can manually review and send emails. When disabled, the system will send automated responses based on your templates.
+              </p>
+            </motion.div>
+
+            {/* Gmail Test Button integrated here */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.35 }} // Slightly later delay
+            >
+              <GmailTestButton user={user} className="h-full" /> {/* Added h-full for alignment if needed */}
+            </motion.div>
+        </div>
       )}
 
       {/* Tab Navigation */}
