@@ -10,6 +10,7 @@ import {
   getTemplates,
   logEmailProcessing,
   getCurrentUser,
+  hasRecentResponse,
   type EmailTemplate,
   type User,
   type EmailLog
@@ -69,7 +70,21 @@ const extractNameFromEmail = (emailSender: string): string => {
   return emailPart.replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 };
 
-// Helper to extract email body from Gmail message
+// Helper to extract clean email address from sender string
+const extractEmailAddress = (emailSender: string): string => {
+  if (!emailSender) return '';
+  
+  // Example: "John Doe <john.doe@example.com>"
+  const match = emailSender.match(/<(.+?)>/);
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  
+  // If no angle brackets, assume the whole string is the email
+  return emailSender.trim();
+};
+
+// Enhanced email body extraction with better multipart handling
 const extractEmailBody = (payload: any): string => {
   console.log('[EmailProcessor extractEmailBody] Processing payload structure:', {
     hasParts: !!payload.parts,
@@ -91,42 +106,75 @@ const extractEmailBody = (payload: any): string => {
       hasParts: !!part.parts
     });
 
-    // Handle nested parts (multipart/alternative, etc.)
+    // Handle nested parts (multipart/alternative, multipart/mixed, etc.)
     if (part.parts && Array.isArray(part.parts)) {
+      // Try to find text/plain first, then text/html
+      const plainPart = part.parts.find((p: any) => p.mimeType === 'text/plain');
+      if (plainPart) {
+        const result = processPart(plainPart, `${partIdentifier} > text/plain`);
+        if (result) return result;
+      }
+      
+      const htmlPart = part.parts.find((p: any) => p.mimeType === 'text/html');
+      if (htmlPart) {
+        const result = processPart(htmlPart, `${partIdentifier} > text/html`);
+        if (result) return result;
+      }
+      
+      // If no text parts found, try any part recursively
       for (const subPart of part.parts) {
-        const subResult = processPart(subPart, `${partIdentifier} > ${subPart.mimeType}`);
-        if (subResult) return subResult;
+        const result = processPart(subPart, `${partIdentifier} > ${subPart.mimeType}`);
+        if (result) return result;
       }
     }
 
-    // Process body data
+    // Process body data if available
     if (part.body && part.body.data && typeof part.body.data === 'string' && part.body.data.length > 0) {
-      const decodedBinary = base64UrlDecodeToBinaryString(part.body.data);
-      if (!decodedBinary) {
-        console.warn(`[EmailProcessor extractEmailBody] Failed to decode ${partIdentifier}`);
+      try {
+        const decodedBinary = base64UrlDecodeToBinaryString(part.body.data);
+        if (!decodedBinary) {
+          console.warn(`[EmailProcessor extractEmailBody] Failed to decode ${partIdentifier}`);
+          return '';
+        }
+
+        let decodedText = binaryStringToUtf8String(decodedBinary);
+        
+        // Enhanced HTML stripping for better text extraction
+        if (part.mimeType === 'text/html') {
+          decodedText = decodedText
+            // Remove style and script tags completely
+            .replace(/<style[^>]*>.*?<\/style>/gis, '')
+            .replace(/<script[^>]*>.*?<\/script>/gis, '')
+            // Convert common HTML elements to text equivalents
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n\n')
+            .replace(/<\/div>/gi, '\n')
+            .replace(/<\/h[1-6]>/gi, '\n\n')
+            .replace(/<li[^>]*>/gi, '• ')
+            .replace(/<\/li>/gi, '\n')
+            // Remove all remaining HTML tags
+            .replace(/<[^>]+>/g, ' ')
+            // Decode HTML entities
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&apos;/g, "'")
+            // Clean up whitespace
+            .replace(/\s+/g, ' ')
+            .replace(/\n\s+/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+        }
+
+        console.log(`[EmailProcessor extractEmailBody] Successfully decoded ${partIdentifier}, length: ${decodedText.length}`);
+        return decodedText;
+      } catch (error) {
+        console.error(`[EmailProcessor extractEmailBody] Error processing ${partIdentifier}:`, error);
         return '';
       }
-
-      let decodedText = binaryStringToUtf8String(decodedBinary);
-      
-      // Strip HTML if it's an HTML part
-      if (part.mimeType === 'text/html') {
-        decodedText = decodedText
-          .replace(/<style[^>]*>.*?<\/style>/gis, '')
-          .replace(/<script[^>]*>.*?<\/script>/gis, '')
-          .replace(/<[^>]+>/g, ' ')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"')
-          .replace(/&#39;/g, "'")
-          .replace(/\s+/g, ' ')
-          .trim();
-      }
-
-      console.log(`[EmailProcessor extractEmailBody] Successfully decoded ${partIdentifier}, length: ${decodedText.length}`);
-      return decodedText;
     }
 
     return '';
@@ -237,13 +285,36 @@ export const processInbox = async (
 
         const subject = subjectHeader?.value || 'No Subject';
         const senderEmail = fromHeader?.value || 'Unknown Sender';
+        const cleanSenderEmail = extractEmailAddress(senderEmail);
         const gmailMessageId = messageIdHeader?.value || message.id;
 
         console.log(`[EmailProcessor processInbox] Email details:`, {
           subject: subject.substring(0, 50),
           sender: senderEmail,
+          cleanSender: cleanSenderEmail,
           messageId: gmailMessageId
         });
+
+        // Check for duplicate responses (prevent sending multiple responses to same sender)
+        const hasRecent = await hasRecentResponse(userId, cleanSenderEmail, 24); // 24 hours threshold
+        if (hasRecent) {
+          console.log(`[EmailProcessor processInbox] Skipping ${cleanSenderEmail} - already responded recently`);
+          
+          // Log the skipped email
+          await logEmailProcessing({
+            gmail_message_id: gmailMessageId,
+            sender_email: cleanSenderEmail,
+            subject: subject,
+            category: 'general',
+            confidence_score: 0,
+            response_sent: false,
+            response_template_id: undefined,
+            processed_at: new Date().toISOString(),
+          }, userId);
+          
+          processedCount++;
+          continue;
+        }
 
         // Extract email body
         const bodyText = extractEmailBody(emailDetails.payload);
@@ -254,7 +325,7 @@ export const processInbox = async (
           // Log the skipped email
           await logEmailProcessing({
             gmail_message_id: gmailMessageId,
-            sender_email: senderEmail,
+            sender_email: cleanSenderEmail,
             subject: subject,
             category: 'general',
             confidence_score: 0,
@@ -283,7 +354,7 @@ export const processInbox = async (
           const extractedName = extractNameFromEmail(senderEmail);
           const variables: Record<string, string> = {
             Name: extractedName,
-            Email: senderEmail,
+            Email: cleanSenderEmail,
             Subject: subject,
             TicketID: message.threadId || message.id,
             OrderNumber: 'N/A'
@@ -292,11 +363,17 @@ export const processInbox = async (
           const personalizedSubject = gmailPersonalizeTemplate(template.subject, variables);
           const personalizedBody = gmailPersonalizeTemplate(template.body, variables);
 
+          console.log(`[EmailProcessor processInbox] Sending personalized response:`, {
+            to: cleanSenderEmail,
+            subject: personalizedSubject,
+            bodyLength: personalizedBody.length
+          });
+
           // Send reply
           try {
             await sendEmailResponse(
               validAccessToken,
-              senderEmail,
+              cleanSenderEmail,
               personalizedSubject,
               personalizedBody,
               message.threadId
@@ -313,7 +390,7 @@ export const processInbox = async (
         // Log processing
         const logEntry: Omit<EmailLog, 'id' | 'created_at' | 'user_id'> = {
           gmail_message_id: gmailMessageId,
-          sender_email: senderEmail,
+          sender_email: cleanSenderEmail,
           subject: subject,
           category: classification.category,
           confidence_score: classification.confidence,

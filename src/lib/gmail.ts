@@ -189,7 +189,7 @@ export const getEmailDetails = async (accessToken: string, messageId: string) =>
   }
 };
 
-// Send email response with proper formatting
+// Send email response with proper formatting and encoding
 export const sendEmailResponse = async (
   accessToken: string,
   to: string,
@@ -198,29 +198,66 @@ export const sendEmailResponse = async (
   threadId?: string
 ) => {
   console.log('[Gmail sendEmailResponse] Sending email response');
+  console.log('[Gmail sendEmailResponse] To:', to);
+  console.log('[Gmail sendEmailResponse] Subject:', subject);
+  console.log('[Gmail sendEmailResponse] Body length:', body.length);
+  console.log('[Gmail sendEmailResponse] Thread ID:', threadId);
 
   try {
-    // Create email in RFC 2822 format with proper line breaks
-    const emailLines = [
+    // Create proper email format with MIME headers
+    const boundary = '----=_Part_' + Math.random().toString(36).substr(2, 9);
+    
+    const emailParts = [
       `To: ${to}`,
       `Subject: ${subject}`,
       threadId ? `In-Reply-To: ${threadId}` : '',
       threadId ? `References: ${threadId}` : '',
-      'Content-Type: text/plain; charset=utf-8',
-      'Content-Transfer-Encoding: 7bit',
+      'MIME-Version: 1.0',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
       '',
-      body.replace(/\n/g, '\r\n'), // Ensure proper line endings
+      `--${boundary}`,
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      body,
+      '',
+      `--${boundary}`,
+      'Content-Type: text/html; charset=UTF-8',
+      'Content-Transfer-Encoding: quoted-printable',
+      '',
+      body.replace(/\n/g, '<br>'),
+      '',
+      `--${boundary}--`
     ].filter(line => line !== '');
 
-    const email = emailLines.join('\r\n');
+    const email = emailParts.join('\r\n');
 
     console.log('[Gmail sendEmailResponse] Email format created, length:', email.length);
+    console.log('[Gmail sendEmailResponse] Email preview:', email.substring(0, 500));
 
-    // Encode email as base64url
-    const encodedEmail = btoa(unescape(encodeURIComponent(email)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    // Encode email as base64url with proper UTF-8 handling
+    let encodedEmail: string;
+    try {
+      // Use TextEncoder for proper UTF-8 encoding
+      const encoder = new TextEncoder();
+      const uint8Array = encoder.encode(email);
+      
+      // Convert to base64
+      let binary = '';
+      uint8Array.forEach(byte => {
+        binary += String.fromCharCode(byte);
+      });
+      
+      encodedEmail = btoa(binary)
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+        
+      console.log('[Gmail sendEmailResponse] Email encoded successfully, length:', encodedEmail.length);
+    } catch (encodingError: any) {
+      console.error('[Gmail sendEmailResponse] Error encoding email:', encodingError);
+      throw new Error('Failed to encode email content: ' + encodingError.message);
+    }
 
     const requestBody: any = {
       raw: encodedEmail,
@@ -249,7 +286,7 @@ export const sendEmailResponse = async (
     }
 
     const data = await response.json();
-    console.log('[Gmail sendEmailResponse] Email sent successfully');
+    console.log('[Gmail sendEmailResponse] Email sent successfully, response:', data);
     return data;
   } catch (error) {
     console.error('[Gmail sendEmailResponse] Error sending email:', error);
@@ -267,39 +304,49 @@ export const classifyEmail = async (subject: string, body: string): Promise<Emai
   const categories = {
     order: [
       'order', 'purchase', 'buy', 'payment', 'invoice', 'receipt', 'delivery',
-      'shipping', 'tracking', 'product', 'item', 'cart', 'checkout', 'transaction'
+      'shipping', 'tracking', 'product', 'item', 'cart', 'checkout', 'transaction',
+      'where is my order', 'order status', 'order number', 'purchase inquiry'
     ],
     support: [
       'help', 'support', 'assistance', 'problem', 'issue', 'error', 'bug',
-      'technical', 'cannot', 'unable', 'broken', 'fix', 'trouble', 'difficulty'
+      'technical', 'cannot', 'unable', 'broken', 'fix', 'trouble', 'difficulty',
+      'not working', 'how to', 'tutorial'
     ],
     billing: [
       'billing', 'charge', 'payment', 'invoice', 'refund', 'credit', 'subscription',
-      'plan', 'upgrade', 'downgrade', 'cancel', 'renewal', 'account'
+      'plan', 'upgrade', 'downgrade', 'cancel', 'renewal', 'account', 'price'
     ],
     feedback: [
       'feedback', 'suggestion', 'improve', 'feature', 'request', 'opinion',
-      'review', 'rating', 'experience', 'recommend'
+      'review', 'rating', 'experience', 'recommend', 'thoughts'
     ],
     complaint: [
       'complaint', 'dissatisfied', 'unhappy', 'disappointed', 'terrible',
-      'awful', 'worst', 'horrible', 'angry', 'frustrated'
+      'awful', 'worst', 'horrible', 'angry', 'frustrated', 'bad experience'
     ],
     compliment: [
       'thank', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic',
-      'love', 'appreciate', 'satisfied', 'happy', 'pleased'
+      'love', 'appreciate', 'satisfied', 'happy', 'pleased', 'awesome'
     ],
     urgent: [
       'urgent', 'emergency', 'asap', 'immediately', 'critical', 'important',
-      'priority', 'rush', 'deadline', 'time sensitive'
+      'priority', 'rush', 'deadline', 'time sensitive', 'urgent help'
     ],
     welcome: [
       'welcome', 'new', 'getting started', 'onboard', 'setup', 'first time',
-      'introduction', 'begin'
+      'introduction', 'begin', 'hello', 'hi there'
     ],
     followup: [
       'follow up', 'following up', 'check in', 'update', 'status', 'progress',
-      'reminder', 'touching base'
+      'reminder', 'touching base', 'any update'
+    ],
+    shipping: [
+      'shipping', 'delivery', 'tracking', 'shipped', 'package', 'courier',
+      'fedex', 'ups', 'dhl', 'postal', 'when will it arrive'
+    ],
+    refund: [
+      'refund', 'return', 'money back', 'cancel order', 'exchange',
+      'replacement', 'defective', 'damaged'
     ]
   };
 

@@ -320,6 +320,30 @@ export async function deleteGmailTokens(userId: string): Promise<{ error: Error 
   return { error: null }
 }
 
+// Check if we've already responded to this sender recently (duplicate prevention)
+export async function hasRecentResponse(userId: string, senderEmail: string, hoursThreshold: number = 24): Promise<boolean> {
+  const thresholdTime = new Date(Date.now() - hoursThreshold * 60 * 60 * 1000).toISOString();
+  
+  const { data, error } = await supabase
+    .from('email_logs')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('sender_email', senderEmail)
+    .eq('response_sent', true)
+    .gte('processed_at', thresholdTime)
+    .limit(1);
+
+  if (error) {
+    console.error('[Supabase hasRecentResponse] Error checking recent responses:', error);
+    return false; // If we can't check, allow the response to be safe
+  }
+
+  const hasRecent = (data && data.length > 0);
+  console.log(`[Supabase hasRecentResponse] Recent response check for ${senderEmail}: ${hasRecent ? 'FOUND' : 'NOT FOUND'}`);
+  
+  return hasRecent;
+}
+
 // Log email processing details
 export async function logEmailProcessing(
   logEntry: Omit<EmailLog, 'id' | 'created_at' | 'user_id'>,
