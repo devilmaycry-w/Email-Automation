@@ -28,31 +28,7 @@ const Footer: React.FC = () => {
 
           {/* Links: GitHub, Feedback, Privacy, Terms */}
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-6 gap-y-4">
-            <motion.a
-              whileHover={{ scale: 1.05, y: -2 }}
-              whileTap={{ scale: 0.95 }}
-              href="https://github.com/your-repo/codexcity"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors group"
-            >
-              <Github className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-medium">GitHub</span>
-            </motion.a>
-            
-            <motion.a
-              whileHover={{ scale: 1.05, y: -2 }}
-              whileTap={{ scale: 0.95 }}
-              href="https://forms.gle/example123"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-2 text-gray-600 hover:text-blue-600 transition-colors group"
-            >
-              <MessageSquare className="w-5 h-5 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-medium">Feedback</span>
-            </motion.a>
-
-            <motion.a
+              <motion.a
               whileHover={{ scale: 1.05, y: -2 }}
               whileTap={{ scale: 0.95 }}
               href="/privacy-policy.html"
@@ -95,7 +71,7 @@ const Footer: React.FC = () => {
 
         <div className="mt-8 pt-6 border-t border-gray-200 text-center">
           <p className="text-xs text-gray-500">
-            © 2025 CodexCity. Streamlining email automation with intelligent AI classification and personalized responses.
+            © 2025 CodexCity. Streamlining Email Automation.
           </p>
           <p className="text-xs text-gray-400 mt-2">
             Contact: <a href="mailto:realankrit@gmail.com" className="text-blue-600 hover:underline">realankrit@gmail.com</a> | 
