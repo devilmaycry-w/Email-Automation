@@ -1,32 +1,13 @@
-/*
-  # Create email templates table
+-- Drop existing policy if any
+DROP POLICY IF EXISTS "Users can manage own templates" ON email_templates;
 
-  1. New Tables
-    - `email_templates`
-      - `id` (uuid, primary key)
-      - `user_id` (uuid, foreign key to auth.users)
-      - `category` (text, enum: order, support, general)
-      - `subject` (text)
-      - `body` (text)
-      - `is_active` (boolean)
-      - `created_at` (timestamp)
-      - `updated_at` (timestamp)
+-- Disable Row Level Security (RLS)
+ALTER TABLE email_templates DISABLE ROW LEVEL SECURITY;
 
-  2. Security
-    - Enable RLS on `email_templates` table
-    - Add policy for users to manage their own templates
+-- Optional: Drop enum if you want to fully simplify the structure
+-- DROP TYPE IF EXISTS email_category;
 
-  3. Default Templates
-    - Insert default templates for each category
-*/
-
--- Create enum for email categories
-DO $$ BEGIN
-  CREATE TYPE email_category AS ENUM ('order', 'support', 'general');
-EXCEPTION
-  WHEN duplicate_object THEN null;
-END $$;
-
+-- Table definition remains the same
 CREATE TABLE IF NOT EXISTS email_templates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -39,20 +20,10 @@ CREATE TABLE IF NOT EXISTS email_templates (
   UNIQUE(user_id, category)
 );
 
-ALTER TABLE email_templates ENABLE ROW LEVEL SECURITY;
-
--- Users can manage their own templates
-CREATE POLICY "Users can manage own templates"
-  ON email_templates
-  FOR ALL
-  TO authenticated
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
-
--- Create index for fast user and category lookups
+-- Keep index for performance
 CREATE INDEX IF NOT EXISTS idx_email_templates_user_category ON email_templates(user_id, category);
 
--- Create trigger to automatically update updated_at
+-- Trigger to auto-update updated_at timestamp
 CREATE TRIGGER update_email_templates_updated_at
   BEFORE UPDATE ON email_templates
   FOR EACH ROW
