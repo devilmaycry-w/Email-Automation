@@ -71,7 +71,7 @@ const Footer: React.FC = () => {
 
         <div className="mt-8 pt-6 border-t border-gray-200 text-center">
           <p className="text-xs text-gray-500">
-            © 2025 CodexCity. Streamlining Email Automation.
+            © 2025 CodexCity. Your's Truly Automation.
           </p>
           <p className="text-xs text-gray-400 mt-2">
             Contact: <a href="mailto:realankrit@gmail.com" className="text-blue-600 hover:underline">realankrit@gmail.com</a> | 
