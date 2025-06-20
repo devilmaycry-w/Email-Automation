@@ -122,5 +122,5 @@ As detailed in the Environment Variables section, you must:
 This `README.md` provides a good overview and setup instructions.
 The SQL reminder for `manual_override_active` clarifies that it's for the public `users` table, provides an example of how to add it, and even a sample table structure and RLS policies, which is very helpful for someone setting up the project.
 
-All tasks for this subtask are now complete.
-I am ready to submit the report.
+---
+This Project is under MIT License
