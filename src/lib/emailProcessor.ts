@@ -342,64 +342,68 @@ export const processInbox = async (
         console.log(`[EmailProcessor processInbox] Classification:`, classification);
 
         // Find matching template
-        const template = activeTemplates.find(t => t.category === classification.category);
-        
-        let responseSent = false;
-        let templateIdUsed: string | undefined = undefined;
+        // Find matching template for classified category
+let template = activeTemplates.find(t => t.category === classification.category);
 
-        if (template) {
-          templateIdUsed = template.id;
-          
-          // Personalize template
-          const extractedName = extractNameFromEmail(senderEmail);
-          const variables: Record<string, string> = {
-            Name: extractedName,
-            Email: cleanSenderEmail,
-            Subject: subject,
-            TicketID: message.threadId || message.id,
-            OrderNumber: 'N/A'
-          };
+// Fallback: Use 'general' template if no match found
+let usedFallback = false;
+if (!template) {
+  template = activeTemplates.find(t => t.category === 'general');
+  usedFallback = true;
+}
 
-          const personalizedSubject = gmailPersonalizeTemplate(template.subject, variables);
-          const personalizedBody = gmailPersonalizeTemplate(template.body, variables);
+let responseSent = false;
+let templateIdUsed: string | undefined = template?.id;
 
-          console.log(`[EmailProcessor processInbox] Sending personalized response:`, {
-            to: cleanSenderEmail,
-            subject: personalizedSubject,
-            bodyLength: personalizedBody.length
-          });
+if (template) {
+  // Personalize as before
+  const extractedName = extractNameFromEmail(senderEmail);
+  const variables: Record<string, string> = {
+    Name: extractedName,
+    Email: cleanSenderEmail,
+    Subject: subject,
+    TicketID: message.threadId || message.id,
+    OrderNumber: 'N/A'
+  };
 
-          // Send reply
-          try {
-            await sendEmailResponse(
-              validAccessToken,
-              cleanSenderEmail,
-              personalizedSubject,
-              personalizedBody,
-              message.threadId
-            );
-            responseSent = true;
-            console.log(`[EmailProcessor processInbox] Successfully sent reply for message ${message.id}`);
-          } catch (sendError) {
-            console.error(`[EmailProcessor processInbox] Failed to send reply for message ${message.id}:`, sendError);
-          }
-        } else {
-          console.log(`[EmailProcessor processInbox] No template found for category: ${classification.category}`);
-        }
+  let personalizedSubject = gmailPersonalizeTemplate(template.subject, variables);
+  let personalizedBody = gmailPersonalizeTemplate(template.body, variables);
 
-        // Log processing
-        const logEntry: Omit<EmailLog, 'id' | 'created_at' | 'user_id'> = {
-          gmail_message_id: gmailMessageId,
-          sender_email: cleanSenderEmail,
-          subject: subject,
-          category: classification.category,
-          confidence_score: classification.confidence,
-          response_sent: responseSent,
-          response_template_id: templateIdUsed,
-          processed_at: new Date().toISOString(),
-        };
+  // Optionally, note fallback in the body/subject
+  if (usedFallback) {
+    personalizedBody = `[Automated note: No template for "${classification.category}", using general reply.]\n\n` + personalizedBody;
+  }
 
-        await logEmailProcessing(logEntry, userId);
+  try {
+    await sendEmailResponse(
+      validAccessToken,
+      cleanSenderEmail,
+      personalizedSubject,
+      personalizedBody,
+      message.threadId
+    );
+    responseSent = true;
+    console.log(`[EmailProcessor processInbox] Successfully sent reply for message ${message.id}`);
+  } catch (sendError) {
+    console.error(`[EmailProcessor processInbox] Failed to send reply for message ${message.id}:`, sendError);
+  }
+} else {
+  console.warn(`[EmailProcessor processInbox] No matching or fallback template found. No response sent.`);
+}
+
+// Log processing, noting fallback
+const logEntry: Omit<EmailLog, 'id' | 'created_at' | 'user_id'> = {
+  gmail_message_id: gmailMessageId,
+  sender_email: cleanSenderEmail,
+  subject: subject,
+  category: classification.category + (usedFallback ? ' (fallback to general)' : ''),
+  confidence_score: classification.confidence,
+  response_sent: responseSent,
+  response_template_id: templateIdUsed,
+  processed_at: new Date().toISOString(),
+};
+
+await logEmailProcessing(logEntry, userId);
         processedCount++;
 
         console.log(`[EmailProcessor processInbox] Successfully processed message ${message.id}`);
