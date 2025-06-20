@@ -204,9 +204,17 @@ export const sendEmailResponse = async (
   console.log('[Gmail sendEmailResponse] Thread ID:', threadId);
 
   try {
-    // Create proper email format with MIME headers
     const boundary = '----=_Part_' + Math.random().toString(36).substr(2, 9);
-    
+
+    // ✅ HTML body formatted correctly
+    const htmlBody = `
+      <html>
+        <body style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
+          <p>${body.replace(/\n/g, '</p><p>')}</p>
+        </body>
+      </html>
+    `;
+
     const emailParts = [
       `To: ${to}`,
       `Subject: ${subject}`,
@@ -225,35 +233,29 @@ export const sendEmailResponse = async (
       'Content-Type: text/html; charset=UTF-8',
       'Content-Transfer-Encoding: quoted-printable',
       '',
-      body.replace(/\n/g, '<br>'),
+      htmlBody,
       '',
       `--${boundary}--`
     ].filter(line => line !== '');
 
     const email = emailParts.join('\r\n');
 
-    console.log('[Gmail sendEmailResponse] Email format created, length:', email.length);
-    console.log('[Gmail sendEmailResponse] Email preview:', email.substring(0, 500));
-
-    // Encode email as base64url with proper UTF-8 handling
+    // Base64url encode
     let encodedEmail: string;
     try {
-      // Use TextEncoder for proper UTF-8 encoding
       const encoder = new TextEncoder();
       const uint8Array = encoder.encode(email);
-      
-      // Convert to base64
       let binary = '';
       uint8Array.forEach(byte => {
         binary += String.fromCharCode(byte);
       });
-      
+
       encodedEmail = btoa(binary)
         .replace(/\+/g, '-')
         .replace(/\//g, '_')
         .replace(/=+$/, '');
-        
-      console.log('[Gmail sendEmailResponse] Email encoded successfully, length:', encodedEmail.length);
+
+      console.log('[Gmail sendEmailResponse] Email encoded successfully');
     } catch (encodingError: any) {
       console.error('[Gmail sendEmailResponse] Error encoding email:', encodingError);
       throw new Error('Failed to encode email content: ' + encodingError.message);
@@ -286,13 +288,14 @@ export const sendEmailResponse = async (
     }
 
     const data = await response.json();
-    console.log('[Gmail sendEmailResponse] Email sent successfully, response:', data);
+    console.log('[Gmail sendEmailResponse] Email sent successfully:', data);
     return data;
   } catch (error) {
     console.error('[Gmail sendEmailResponse] Error sending email:', error);
     throw error;
   }
 };
+
 
 // Enhanced AI classification with more categories
 export const classifyEmail = async (subject: string, body: string): Promise<EmailClassification> => {
