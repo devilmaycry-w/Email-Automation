@@ -396,7 +396,8 @@ const logEntry: Omit<EmailLog, 'id' | 'created_at' | 'user_id'> = {
   gmail_message_id: gmailMessageId,
   sender_email: cleanSenderEmail,
   subject: subject,
-  category: classification.category + (usedFallback ? ' (fallback to general)' : ''),
+  // Always use only valid enum values for category
+  category: usedFallback ? 'general' : classification.category,
   confidence_score: classification.confidence,
   response_sent: responseSent,
   response_template_id: templateIdUsed,
