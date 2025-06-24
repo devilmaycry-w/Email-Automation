@@ -61,7 +61,7 @@ const Auth: React.FC = () => {
   const features = [
     {
       icon: Zap,
-      title: 'AI-Powered Classification',
+      title: 'AI-Powered Classification soon',
       description: 'Automatically categorize emails with 98.5% accuracy'
     },
     {
@@ -142,7 +142,7 @@ const Auth: React.FC = () => {
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                   CodexCity
                 </h1>
-                <p className="text-gray-600 font-medium">AI Email Automation</p>
+                <p className="text-gray-600 font-medium">Email Automation</p>
               </div>
             </motion.div>
 
@@ -160,7 +160,7 @@ const Auth: React.FC = () => {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="text-xl text-gray-600 mb-8"
             >
-              Automate responses, classify emails with AI, and engage customers 24/7 with intelligent automation.
+              Automate responses, classify emails with fast edge keywords, and engage customers 24/7 with intelligent automation.
             </motion.p>
           </div>
 
