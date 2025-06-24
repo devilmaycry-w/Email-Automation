@@ -70,7 +70,7 @@ const QuickActions: React.FC<QuickActionsProps> = ({ user, onStatsUpdate }) => {
 
   const actions = [
     {
-      title: 'Test Classification',
+      title: 'Coming Soon',
       description: 'Test AI with sample emails',
       icon: Zap,
       color: 'from-gray-800 to-gray-600',
