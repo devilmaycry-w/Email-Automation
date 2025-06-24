@@ -248,7 +248,7 @@ function App() {
               animate={{ opacity: [0.5, 0.8, 0.5] }}
               transition={{ duration: 1.5, repeat: Infinity, delay: 0.5 }}
             >
-              Preparing your AI-powered email automation
+              Preparing your one click automation
             </motion.p>
             {error && (
               <div className="mt-4 p-3 bg-red-50 text-red-600 rounded-lg">
