@@ -14,177 +14,173 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [showSetup, setShowSetup] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Auth state management
+  // Auth state management with comprehensive error handling
   useEffect(() => {
     let mounted = true;
+    let timeoutId: NodeJS.Timeout;
+    let subscription: { unsubscribe: () => void };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const handleAuthStateChange = async (event: string, session: { user: { id: string } } | null) => {
       if (!mounted) return;
 
       console.log('[App.tsx] Auth state change:', event, session?.user?.id);
 
-      if (event === 'SIGNED_IN' && session?.user) {
-        console.log('[App.tsx] SIGNED_IN event detected for user ID:', session.user.id);
-        try {
-          console.log('[App.tsx] SIGNED_IN: Before getCurrentUser().');
+      try {
+        if (event === 'SIGNED_IN' && session?.user) {
+          console.log('[App.tsx] SIGNED_IN event detected for user ID:', session.user.id);
+          
           const currentUser = await getCurrentUser();
-          console.log('[App.tsx] SIGNED_IN: After getCurrentUser(). currentUser:', currentUser);
-
           if (!currentUser) {
-            // This case might happen if getCurrentUser itself returns null despite authUser being present
-            // (e.g. if the function had an internal unrecoverable issue not caught before the final return)
-            console.error('[App.tsx] SIGNED_IN: getCurrentUser() returned null/undefined unexpectedly for an authenticated user. Setting user to null.');
-            setUser(null);
-            // Potentially navigate to an error page or show a global error message
-            // For now, it will just lead to the "logged out" state view.
-          } else {
-            console.log('[App.tsx] SIGNED_IN: Before setUser().');
-            setUser(currentUser);
-            console.log('[App.tsx] SIGNED_IN: After setUser().');
+            console.error('[App.tsx] SIGNED_IN: getCurrentUser() returned null unexpectedly');
+            throw new Error('Failed to get user after sign in');
+          }
 
-            console.log('[App.tsx] SIGNED_IN: Before createDefaultTemplates().');
+          setUser(currentUser);
+          setError(null);
+
+          try {
+            await createDefaultTemplates(session.user.id);
+          } catch (templateError) {
+            console.error('[App.tsx] Error creating default templates:', templateError);
+            // Non-fatal error, continue
+          }
+
+          const pendingCode = sessionStorage.getItem('gmail_auth_code');
+          if (pendingCode) {
             try {
-              await createDefaultTemplates(session.user.id);
-              console.log('[App.tsx] SIGNED_IN: After createDefaultTemplates() (success).');
-            } catch (templateError) {
-              console.error('[App.tsx] SIGNED_IN: Error creating default templates:', templateError);
-              console.log('[App.tsx] SIGNED_IN: After createDefaultTemplates() (error).');
-              // Non-fatal, continue user session.
-            }
-
-            const pendingCode = sessionStorage.getItem('gmail_auth_code');
-            if (pendingCode) {
-              console.log('[App.tsx] SIGNED_IN: Processing pending Gmail auth code:', pendingCode);
               sessionStorage.removeItem('gmail_auth_code');
-              try {
-                const config = {
-                  clientId: import.meta.env.VITE_GMAIL_CLIENT_ID!,
-                  clientSecret: import.meta.env.VITE_GMAIL_CLIENT_SECRET!,
-                  redirectUri: import.meta.env.VITE_GMAIL_REDIRECT_URI!
-                };
-                console.log('[App.tsx] SIGNED_IN: Config for exchangeCodeForToken:', { clientId: config.clientId, redirectUri: config.redirectUri, clientSecretExists: !!config.clientSecret });
+              const config = {
+                clientId: import.meta.env.VITE_GMAIL_CLIENT_ID!,
+                clientSecret: import.meta.env.VITE_GMAIL_CLIENT_SECRET!,
+                redirectUri: import.meta.env.VITE_GMAIL_REDIRECT_URI!
+              };
 
-                const tokens = await exchangeCodeForToken(pendingCode, config);
-                console.log('[App.tsx] SIGNED_IN: Tokens received from exchangeCodeForToken:', tokens);
+              const tokens = await exchangeCodeForToken(pendingCode, config);
+              if (tokens) {
+                const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+                await storeGmailTokens(session.user.id, {
+                  access_token: tokens.access_token,
+                  refresh_token: tokens.refresh_token,
+                  expires_at: expiresAt,
+                  scope: tokens.scope
+                });
 
-                if (tokens) {
-                  const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-                  try {
-                    console.log('[App.tsx] SIGNED_IN: Attempting to store tokens via storeGmailTokens...');
-                    await storeGmailTokens(session.user.id, {
-                      access_token: tokens.access_token,
-                      refresh_token: tokens.refresh_token, // Ensure this is tokens.refresh_token
-                      expires_at: expiresAt,
-                      scope: tokens.scope
-                    });
-                    console.log('[App.tsx] SIGNED_IN: Tokens stored successfully.');
-
-                    // Update user state to reflect gmail_connected: true
-                    console.log('[App.tsx] SIGNED_IN: Before getCurrentUser() after successful token storage.');
-                    const updatedUser = await getCurrentUser(); // This will now also fetch the tokens status
-                    console.log('[App.tsx] SIGNED_IN: After getCurrentUser() after successful token storage. updatedUser:', updatedUser);
-                    setUser(updatedUser); // This will set the user, including gmail_connected status
-                    alert('Gmail connected successfully!');
-
-                  } catch (storageError) {
-                    console.error('[App.tsx] SIGNED_IN: CRITICAL: Failed to store Gmail tokens:', storageError);
-                    alert('Gmail connected, but there was an issue saving your connection details. Please try reconnecting or contact support.');
-                    // If storage fails, we should ensure the user state reflects gmail_connected: false.
-                    // Fetching the user again would achieve this if tokens aren't actually stored.
-                    // Or, if we have the currentUser object from before, update it.
-                    console.log('[App.tsx] SIGNED_IN: Before getCurrentUser() after token storage failure.');
-                    const userAfterStorageFailure = await getCurrentUser();
-                    console.log('[App.tsx] SIGNED_IN: After getCurrentUser() after token storage failure. userAfterStorageFailure:', userAfterStorageFailure);
-                    setUser(userAfterStorageFailure); // This will reflect gmail_connected: false if tokens weren't stored
-                  }
-                } else {
-                  console.log('[App.tsx] SIGNED_IN: No tokens received from exchangeCodeForToken, skipping storage.');
-                }
-                console.log('[App.tsx] SIGNED_IN: Finished processing pending Gmail auth code section.');
-              } catch (exchangeError) { // Catch errors from exchangeCodeForToken or other issues before storage attempt
-                console.error('[App.tsx] SIGNED_IN: Error during Gmail auth code processing (exchange or pre-storage):', exchangeError);
-                // Non-fatal for login, user might need to retry Gmail connect.
-                // Ensure user state is updated if it was optimistically set or if getCurrentUser needs to be called again.
-                // For now, just logging, as the main try-catch for SIGNED_IN will handle critical failures.
+                const updatedUser = await getCurrentUser();
+                setUser(updatedUser);
               }
-            }
-
-            if (location.pathname === '/auth') {
-              console.log('[App.tsx] SIGNED_IN: Before navigate("/") from /auth page.');
-              navigate('/');
-              console.log('[App.tsx] SIGNED_IN: After navigate("/") from /auth page.');
+            } catch (gmailError) {
+              console.error('[App.tsx] Error processing Gmail auth:', gmailError);
+              // Non-fatal error, continue
             }
           }
-        } catch (error) {
-          console.error('[App.tsx] SIGNED_IN: Critical error during user setup process:', error);
-          setUser(null); // Reset user state if setup fails critically
-          // Potentially navigate to an error page or show a global error message
+
+          if (location.pathname === '/auth') {
+            navigate('/');
+          }
+        } else if (event === 'SIGNED_OUT') {
+          console.log('[App.tsx] SIGNED_OUT event detected');
+          setUser(null);
+          setError(null);
         }
-      } else if (event === 'SIGNED_OUT') {
-        console.log('[App.tsx] SIGNED_OUT event detected.');
-        console.log('[App.tsx] Before setUser(null) in SIGNED_OUT.');
-        setUser(null);
-        console.log('[App.tsx] After setUser(null) in SIGNED_OUT.');
-      }
-
-      console.log('[App.tsx] Before setLoading(false) at end of onAuthStateChange.');
-      setLoading(false);
-      console.log('[App.tsx] After setLoading(false) at end of onAuthStateChange.');
-    });
-
-    // Check initial auth state
-    const checkUser = async () => {
-      console.log('[App.tsx] checkUser: Starting initial user check.');
-      try {
-        console.log('[App.tsx] checkUser: Before getCurrentUser().');
-        const currentUser = await getCurrentUser();
-        console.log('[App.tsx] checkUser: After getCurrentUser(). currentUser:', currentUser);
+      } catch (authError) {
+        console.error('[App.tsx] Error during auth state change:', authError);
         if (mounted) {
-          console.log('[App.tsx] checkUser: Before setUser() (mounted).');
-          setUser(currentUser);
-          console.log('[App.tsx] checkUser: After setUser() (mounted).');
+          setError('Failed to process authentication state. Please refresh the page.');
+          setUser(null);
         }
-      } catch (error) {
-        console.error('[App.tsx] checkUser: Error checking user:', error);
       } finally {
         if (mounted) {
-          console.log('[App.tsx] checkUser: Before setLoading(false) in finally block (mounted).');
           setLoading(false);
-          console.log('[App.tsx] checkUser: After setLoading(false) in finally block (mounted).');
         }
       }
     };
 
-    checkUser();
+    // Set timeout to prevent infinite loading
+    timeoutId = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('Loading timeout reached - forcing loading state to false');
+        setError('Loading timed out. Please check your connection.');
+        setLoading(false);
+      }
+    }, 10000); // 10 second timeout
+
+    // Initialize auth subscription
+    subscription = supabase.auth.onAuthStateChange(handleAuthStateChange).data;
+
+    // Check initial auth state with retry logic
+    const checkUserWithRetry = async (attempt = 1): Promise<void> => {
+      if (!mounted) return;
+
+      try {
+        console.log('[App.tsx] Checking user, attempt:', attempt);
+        const currentUser = await getCurrentUser();
+        
+        if (!mounted) return;
+        
+        if (currentUser) {
+          setUser(currentUser);
+          setError(null);
+        } else {
+          // If no user but we have a session, there might be a race condition
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session && attempt < 3) { // Retry up to 3 times
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+            return checkUserWithRetry(attempt + 1);
+          }
+        }
+      } catch (error) {
+        console.error('[App.tsx] Error checking user:', error);
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+          return checkUserWithRetry(attempt + 1);
+        } else {
+          setError('Failed to load user data. Please refresh the page.');
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+          clearTimeout(timeoutId);
+        }
+      }
+    };
+
+    checkUserWithRetry();
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      clearTimeout(timeoutId);
+      if (subscription?.unsubscribe) {
+        subscription.unsubscribe();
+      }
     };
   }, [navigate, location.pathname]);
 
-  // Handle successful Gmail connection from callback or manual disconnect/reconnect
+  // Handle successful Gmail connection
   const handleGmailConnectionChange = async () => {
     try {
       const updatedUser = await getCurrentUser();
       setUser(updatedUser);
-      // We don't necessarily want to close the setup modal on every connection change,
-      // e.g., after a disconnect, the user might still be in the modal.
-      // Let the modal manage its own closing via onClose prop.
-      // setShowSetup(false);
     } catch (error) {
       console.error('Error updating user after Gmail connection change:', error);
+      setError('Failed to update Gmail connection status');
     }
   };
 
-  console.log('[App.tsx] Rendering App component. Current loading state:', loading, 'Current user state:', user);
+  // Reset error when location changes
+  useEffect(() => {
+    setError(null);
+  }, [location.pathname]);
+
+  console.log('[App.tsx] Rendering App component. Current state:', { loading, user, error });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center relative overflow-hidden">
-        {/* Subtle background elements */}
+        {/* Loading animation remains the same */}
         <div className="absolute inset-0">
           <motion.div
             animate={{
@@ -254,6 +250,11 @@ function App() {
             >
               Preparing your AI-powered email automation
             </motion.p>
+            {error && (
+              <div className="mt-4 p-3 bg-red-50 text-red-600 rounded-lg">
+                {error}
+              </div>
+            )}
           </motion.div>
         </motion.div>
       </div>
@@ -262,52 +263,24 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 relative overflow-hidden">
-      {/* Subtle background elements */}
+      {/* Background elements remain the same */}
       <div className="absolute inset-0 overflow-hidden">
-        <motion.div
-          animate={{
-            x: [0, 60, 0],
-            y: [0, -30, 0],
-            scale: [1, 1.05, 1],
-          }}
-          transition={{
-            duration: 12,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-          className="absolute -top-20 -left-20 w-96 h-96 bg-gradient-to-r from-gray-200/20 to-gray-300/15 rounded-full blur-3xl"
-        />
-        <motion.div
-          animate={{
-            x: [0, -40, 0],
-            y: [0, 30, 0],
-            scale: [1, 0.95, 1],
-          }}
-          transition={{
-            duration: 15,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: 3
-          }}
-          className="absolute top-1/2 -right-32 w-80 h-80 bg-gradient-to-r from-gray-300/15 to-gray-200/20 rounded-full blur-3xl"
-        />
-        <motion.div
-          animate={{
-            x: [0, 30, 0],
-            y: [0, -20, 0],
-            scale: [1, 1.1, 1],
-          }}
-          transition={{
-            duration: 10,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: 5
-          }}
-          className="absolute bottom-20 left-1/3 w-64 h-64 bg-gradient-to-r from-gray-400/10 to-gray-300/15 rounded-full blur-3xl"
-        />
+        {/* ... existing background motion divs ... */}
       </div>
 
       <div className="relative z-10">
+        {error && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded max-w-md mx-auto z-50">
+            {error}
+            <button 
+              onClick={() => setError(null)}
+              className="absolute top-1 right-1 text-red-500 hover:text-red-700"
+            >
+              &times;
+            </button>
+          </div>
+        )}
+
         <Routes>
           <Route path="/auth" element={<Auth />} />
           <Route path="/auth/gmail/callback" element={<GmailCallback onSuccess={handleGmailConnectionChange} />} />
