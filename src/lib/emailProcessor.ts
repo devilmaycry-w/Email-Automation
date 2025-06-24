@@ -133,19 +133,24 @@ const extractEmailBody = (payload: any): string => {
   return bodyText;
 };
 
+// Much less aggressive duplicate check: BOTH subject and body must be highly similar, threshold 0.98, skip self-comparison, with debug logging
 const isSimilarToRecent = (
   currentSubject: string,
   currentBody: string,
   recentLogs: EmailLog[],
-  threshold = 0.85
+  currentMessageId?: string,
+  threshold = 0.98
 ) => {
   for (const log of recentLogs) {
+    if (currentMessageId && log.gmail_message_id === currentMessageId) continue;
     const subjectSimilarity = stringSimilarity.compareTwoStrings(currentSubject, log.subject || '');
     const bodySimilarity = stringSimilarity.compareTwoStrings(
       (currentBody || '').slice(0, 2000),
       (log.body || '').slice(0, 2000)
     );
-    if (subjectSimilarity > threshold || bodySimilarity > threshold) {
+    console.log(`[DuplicateCheck] Comparing with log: ${log.subject}`);
+    console.log(`[DuplicateCheck] Subject similarity: ${subjectSimilarity}, Body similarity: ${bodySimilarity}`);
+    if (subjectSimilarity > threshold && bodySimilarity > threshold) {
       return true;
     }
   }
@@ -207,9 +212,10 @@ export const processInbox = async (
 
         const bodyText = extractEmailBody(emailDetails.payload);
 
-        // Smart duplicate check (subject/body similarity)
+        // Much less aggressive duplicate check
         const recentLogs = await getRecentEmailLogs(userId, cleanSenderEmail, 24, 5);
-        if (isSimilarToRecent(subject, bodyText, recentLogs)) {
+        if (isSimilarToRecent(subject, bodyText, recentLogs, gmailMessageId, 0.98)) {
+          console.log(`[EmailProcessor processInbox] Skipping similar message from ${cleanSenderEmail}`);
           await logEmailProcessing({
             gmail_message_id: gmailMessageId,
             sender_email: cleanSenderEmail,
