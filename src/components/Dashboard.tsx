@@ -158,7 +158,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
       bgGlow: 'shadow-purple-500/20'
     },
     { 
-      label: 'AI Categories', 
+      label: 'Key Categories', 
       value: loadingStats ? '...' : Object.keys(emailStats.categoryBreakdown).length.toString(), 
       icon: Brain, 
       color: 'from-orange-600 via-amber-500 to-yellow-600', 
