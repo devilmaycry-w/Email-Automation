@@ -232,7 +232,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
           animate={{ scale: [1, 1.02, 1] }}
           transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
         >
-          Welcome to CodexCity
+          Yours Truly Automation
         </motion.h2>
         <motion.p 
           className="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed"
@@ -240,7 +240,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user: initialUser }) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.2 }}
         >
-          Transform your email management with AI-powered automation. 
+          Transform your email management with fast edge keyword automation. 
           Classify, respond, and engage with your customers effortlessly.
         </motion.p>
 
