@@ -73,7 +73,7 @@ const Header: React.FC<HeaderProps> = ({ user, onShowSetup }) => {
               <h1 className="text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                 CodexCity
               </h1>
-              <p className="text-xs text-gray-500 font-medium hidden sm:block">AI Email Automation</p>
+              <p className="text-xs text-gray-500 font-medium hidden sm:block">One Stop Email Automation</p>
             </div>
           </motion.div>
 
